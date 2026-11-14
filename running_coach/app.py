@@ -7,6 +7,7 @@ import os
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI
+from telegram.error import NetworkError
 
 from . import calendar_store as cs
 from . import dreeve, dreeve_mcp, weather
@@ -45,6 +46,29 @@ def verify_services_connectivity() -> None:
     logger.info("=== FIN DU TEST DE CONNECTIVITÉ ===")
 
 
+STARTUP_RETRY_DELAYS_S = (5, 10, 20, 40, 60)   # ~2 min 15 au total avant d'abandonner (Docker relance alors le conteneur)
+POLLING_BOOTSTRAP_RETRIES = 5
+
+
+async def initialize_telegram(tg_app, delays=STARTUP_RETRY_DELAYS_S) -> None:
+    """Première connexion à Telegram (getMe), avec nouvelles tentatives : un réseau lent au démarrage ne doit pas
+    faire tomber le bot. Un token invalide (pas une erreur réseau) échoue tout de suite."""
+    attempts = len(delays) + 1
+    for attempt, delay in enumerate((*delays, None), 1):
+        try:
+            await tg_app.initialize()
+            if attempt > 1:
+                logger.info(f"[TELEGRAM] Connecté à l'essai {attempt}/{attempts}.")
+            return
+        except NetworkError as e:   # TimedOut en fait partie
+            if delay is None:
+                logger.error(f"[TELEGRAM] Injoignable après {attempts} essais : {type(e).__name__} {e}. Arrêt.")
+                raise
+            logger.warning(f"[TELEGRAM] Injoignable (essai {attempt}/{attempts}) : {type(e).__name__} {e} ; "
+                           f"nouvel essai dans {delay} s.")
+            await asyncio.sleep(delay)
+
+
 @contextlib.asynccontextmanager
 async def lifespan(_: FastAPI):
     await asyncio.to_thread(verify_services_connectivity)
@@ -57,9 +81,9 @@ async def lifespan(_: FastAPI):
     else:
         bot = build_bot()
         tg_app = bot.app
-        await tg_app.initialize()
+        await initialize_telegram(tg_app)
         await tg_app.start()
-        await tg_app.updater.start_polling()
+        await tg_app.updater.start_polling(bootstrap_retries=POLLING_BOOTSTRAP_RETRIES)
         try:
             await tg_app.bot.set_my_commands(BOT_COMMANDS)   # menu « / » dans Telegram
             if (await tg_app.bot.get_my_name()).name != BOT_NAME:   # nom affiché du bot (limité par Telegram : seulement s'il change)

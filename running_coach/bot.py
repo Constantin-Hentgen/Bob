@@ -274,10 +274,20 @@ class CoachBot(InfoMixin, KitchenMixin, MealsMixin, RunsMixin, JobsMixin):
                 await self._push(PROPOSAL_OUTCOME["x"])
 
 
+TELEGRAM_CONNECT_TIMEOUT_S = 10
+TELEGRAM_READ_TIMEOUT_S = 20
+TELEGRAM_POLL_READ_TIMEOUT_S = 30
+
+
 def build_bot() -> CoachBot:
     # Handlers concurrents : un message reçu pendant que le coach réfléchit est mis en attente (et regroupé)
     # au lieu de bloquer la file ; l'agent sérialise lui-même ses exécutions.
-    app = Application.builder().token(settings.telegram_bot_token).concurrent_updates(True).build()
+    # Délais HTTP plus larges que ceux par défaut (5 s) : une réponse lente de Telegram ne doit pas faire échouer un envoi
+    # ni le démarrage. Long polling : la lecture doit durer plus que l'attente côté serveur (10 s).
+    app = (Application.builder().token(settings.telegram_bot_token).concurrent_updates(True)
+           .connect_timeout(TELEGRAM_CONNECT_TIMEOUT_S).read_timeout(TELEGRAM_READ_TIMEOUT_S)
+           .write_timeout(TELEGRAM_READ_TIMEOUT_S).get_updates_connect_timeout(TELEGRAM_CONNECT_TIMEOUT_S)
+           .get_updates_read_timeout(TELEGRAM_POLL_READ_TIMEOUT_S).build())
     bot = CoachBot(app)
     handlers = {
         "plan": bot.on_agenda, "load": bot.on_form, "runs": bot.on_last_runs, "weather": bot.on_weather,
