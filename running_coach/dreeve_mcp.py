@@ -5,7 +5,7 @@ Dreeve sert MCP en « streamable HTTP » sur `<instance>/mcp`, avec une clé dé
 aussi être définie dans le `.env` de Dreeve, sinon il refuse toute requête.
 
 - Le catalogue d'outils est chargé une fois (puis figé et trié) : il fait partie
-  du préfixe mis en cache côté Anthropic, il ne doit pas varier d'un appel à l'autre.
+  du préfixe mis en cache par le fournisseur du modèle, il ne doit pas varier d'un appel à l'autre.
 - Une session MCP est ouverte paresseusement pendant un run d'agent (seulement si
   le modèle appelle un outil Dreeve) et fermée à la fin du run, dans la même tâche.
 """
@@ -54,7 +54,7 @@ async def _connect():
                 yield session
 
 
-def _to_anthropic(tool) -> dict:
+def _to_tool(tool) -> dict:
     schema = dict(tool.input_schema or {"type": "object", "properties": {}})
     schema.setdefault("type", "object")
     return {
@@ -78,7 +78,7 @@ async def load_tools() -> list[dict]:
                      "DREEVE_MCP_KEY (drvm_…, pas la clé REST drv_…) est définie ici ET dans le .env de Dreeve.")
         return []
     tools = sorted((t for t in listed.tools if t.name not in EXCLUDED), key=lambda t: t.name)
-    _catalog = [_to_anthropic(t) for t in tools]
+    _catalog = [_to_tool(t) for t in tools]
     logger.info(f"[DREEVE MCP] {len(_catalog)} outil(s) : {', '.join(t.name for t in tools)}")
     return _catalog
 

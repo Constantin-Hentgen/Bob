@@ -36,13 +36,13 @@ def verify_services_connectivity() -> None:
         except Exception as e:
             logger.error(f"[METEO] Erreur Open-Meteo : {e}")
 
-    if settings.radicale_url:
+    if settings.caldav_url:
         try:
             now = datetime.datetime.now(UTC)
             events, skipped = cs.list_events(now, now + datetime.timedelta(days=7))
-            logger.info(f"[RADICALE] CalDAV OK : {len(events)} événement(s) sur 7 jours ({skipped} illisible(s)).")
+            logger.info(f"[CALDAV] Agenda OK : {len(events)} événement(s) sur 7 jours ({skipped} illisible(s)).")
         except Exception as e:
-            logger.error(f"[RADICALE] Échec de connexion CalDAV : {e}")
+            logger.error(f"[CALDAV] Échec de connexion à l'agenda : {e}")
     logger.info("=== FIN DU TEST DE CONNECTIVITÉ ===")
 
 
@@ -119,7 +119,7 @@ async def lifespan(_: FastAPI):
             for i, (hour, minute) in enumerate(settings.meal_check_times):
                 scheduler.add_job(bot.check_meal, "cron", hour=hour, minute=minute, args=[i],
                                   misfire_grace_time=1800, coalesce=True)
-            if settings.weather_enabled and settings.radicale_url and settings.rain_check_minutes > 0:
+            if settings.weather_enabled and settings.caldav_url and settings.rain_check_minutes > 0:
                 scheduler.add_job(bot.check_weather, "interval", minutes=settings.rain_check_minutes, coalesce=True,
                                   next_run_time=datetime.datetime.now(settings.tz) + datetime.timedelta(minutes=1))
             if settings.dreeve_enabled and settings.activity_poll_minutes > 0:

@@ -9,7 +9,15 @@ services:
     # Une variable absente arrive vide et prend la valeur par défaut du code (voir .env.example).
     # Les lignes parasites (vides, commentaires) de l'UI Portainer sont ignorées.
     environment:
-      # Anthropic
+      # Modèle de langage (Anthropic ou toute API compatible OpenAI)
+      LLM_PROVIDER: ${LLM_PROVIDER:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_MODEL: ${LLM_MODEL:-}
+      LLM_PLANNING_MODEL: ${LLM_PLANNING_MODEL:-}
+      LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-}
+      LLM_MAX_TOOL_ROUNDS: ${LLM_MAX_TOOL_ROUNDS:-}
+      # anciens noms, encore acceptés
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       CLAUDE_MODEL: ${CLAUDE_MODEL:-}
       CLAUDE_PLANNING_MODEL: ${CLAUDE_PLANNING_MODEL:-}
@@ -18,12 +26,17 @@ services:
       # Telegram
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
-      # Radicale
+      # Agenda CalDAV (Radicale, Nextcloud, Baïkal, Fastmail, iCloud…)
+      CALDAV_URL: ${CALDAV_URL:-}
+      CALDAV_USER: ${CALDAV_USER:-}
+      CALDAV_PASS: ${CALDAV_PASS:-}
+      CALDAV_SHOPPING_URL: ${CALDAV_SHOPPING_URL:-}
+      # anciens noms, encore acceptés
       RADICALE_URL: ${RADICALE_URL:-}
       RADICALE_USER: ${RADICALE_USER:-}
       RADICALE_PASS: ${RADICALE_PASS:-}
       RADICALE_SHOPPING_URL: ${RADICALE_SHOPPING_URL:-}
-      RADICALE_TASKS_URL: ${RADICALE_TASKS_URL:-}   # ancien nom de RADICALE_SHOPPING_URL
+      RADICALE_TASKS_URL: ${RADICALE_TASKS_URL:-}
       # Dreeve
       DREEVE_URL: ${DREEVE_URL:-}
       DREEVE_API_URL: ${DREEVE_API_URL:-}
@@ -71,6 +84,9 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-}
       COACH_DATA_DIR: /data
       TZ: ${COACH_TZ:-Europe/Paris}
+    # LLM_PROVIDER=ollama : le serveur Ollama de l'hôte est joignable sur host.docker.internal (aussi sous Linux)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "${COACH_PORT:-18000}:8000"
     volumes:

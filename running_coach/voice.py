@@ -1,6 +1,6 @@
 """Messages vocaux Telegram → texte, transcrits LOCALEMENT avec faster-whisper : l'audio ne quitte pas le serveur.
 
-Claude ne prend pas d'audio en entrée : le vocal est transcrit ici, puis le texte est traité comme un message écrit.
+Le modèle de langage ne prend pas d'audio en entrée : le vocal est transcrit ici, puis le texte est traité comme un message écrit.
 Le modèle (WHISPER_MODEL, « small » par défaut, bon compromis en français sur CPU) est téléchargé au
 premier vocal dans le volume /data (il survit donc aux redéploiements), puis gardé en mémoire.
 """
