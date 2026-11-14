@@ -23,7 +23,9 @@ def test_every_code_variable_is_passed_by_docker_compose():
 
 def test_every_code_variable_is_documented_in_env_example():
     documented = set(re.findall(r"^#?\s*([A-Z_]+)=", (ROOT / ".env.example").read_text(), re.M))
-    legacy = {"DREEVE_API_URL", "WEATHER_LAT", "WEATHER_LON", "TZ", "RADICALE_TASKS_URL"}   # anciens noms, encore acceptés
+    legacy = {"DREEVE_API_URL", "WEATHER_LAT", "WEATHER_LON", "TZ", "RADICALE_TASKS_URL", "RADICALE_URL", "RADICALE_USER",
+              "RADICALE_PASS", "RADICALE_SHOPPING_URL", "ANTHROPIC_API_KEY", "CLAUDE_MODEL", "CLAUDE_PLANNING_MODEL",
+              "CLAUDE_MAX_TOKENS", "CLAUDE_MAX_TOOL_ROUNDS"}   # anciens noms, encore acceptés
     missing = CODE_VARS - documented - legacy
     assert not missing, f"à documenter dans .env.example : {sorted(missing)}"
 
@@ -39,16 +41,18 @@ def test_briefing_off():
     assert config._briefing_time("off") is None and config._briefing_time("07:30") == (7, 30)
 
 
-def test_shopping_calendar_is_opt_in_accepts_old_name_and_never_the_training_calendar(monkeypatch):
-    monkeypatch.setenv("RADICALE_URL", "https://dav.example/me/cal/")
-    for name in ("RADICALE_SHOPPING_URL", "RADICALE_TASKS_URL"):
+def test_shopping_calendar_is_opt_in_accepts_old_names_and_never_the_training_calendar(monkeypatch):
+    monkeypatch.setenv("CALDAV_URL", "https://dav.example/me/cal/")
+    for name in ("CALDAV_SHOPPING_URL", "RADICALE_SHOPPING_URL", "RADICALE_TASKS_URL"):
         monkeypatch.delenv(name, raising=False)
-    assert config.Settings.from_env().radicale_shopping_url is None
+    assert config.Settings.from_env().caldav_shopping_url is None
     monkeypatch.setenv("RADICALE_TASKS_URL", "https://dav.example/me/shopping/")      # ancien nom
-    assert config.Settings.from_env().radicale_shopping_url == "https://dav.example/me/shopping/"
-    monkeypatch.setenv("RADICALE_SHOPPING_URL", "https://dav.example/me/courses/")    # le nouveau nom prime
-    assert config.Settings.from_env().radicale_shopping_url == "https://dav.example/me/courses/"
-    monkeypatch.setenv("RADICALE_SHOPPING_URL", "https://dav.example/me/cal")         # agenda d'entraînement
-    assert config.Settings.from_env().radicale_shopping_url is None
-    monkeypatch.setenv("RADICALE_SHOPPING_URL", "off")
-    assert config.Settings.from_env().radicale_shopping_url is None
+    assert config.Settings.from_env().caldav_shopping_url == "https://dav.example/me/shopping/"
+    monkeypatch.setenv("RADICALE_SHOPPING_URL", "https://dav.example/me/courses/")    # ancien nom, plus récent
+    assert config.Settings.from_env().caldav_shopping_url == "https://dav.example/me/courses/"
+    monkeypatch.setenv("CALDAV_SHOPPING_URL", "https://dav.example/me/achats/")       # le nouveau nom prime
+    assert config.Settings.from_env().caldav_shopping_url == "https://dav.example/me/achats/"
+    monkeypatch.setenv("CALDAV_SHOPPING_URL", "https://dav.example/me/cal")           # agenda d'entraînement
+    assert config.Settings.from_env().caldav_shopping_url is None
+    monkeypatch.setenv("CALDAV_SHOPPING_URL", "off")
+    assert config.Settings.from_env().caldav_shopping_url is None

@@ -1,4 +1,4 @@
-"""Radicale / CalDAV : lecture et écritures vérifiées.
+"""Agenda CalDAV (Radicale, Nextcloud, Baïkal, Fastmail, iCloud…) : lecture et écritures vérifiées.
 
 - tout est identifié par UID (pas de recherche floue par titre) ;
 - chaque écriture est vérifiée par RELECTURE sur le serveur ;
@@ -172,8 +172,8 @@ _local = threading.local()   # un client (donc une session HTTP) par thread : as
 def get_calendar():
     """Client CalDAV réutilisé par thread (keep-alive) au lieu d'un nouveau par appel, jamais partagé entre threads."""
     if getattr(_local, "calendar", None) is None:
-        client = caldav.DAVClient(url=settings.radicale_url, username=settings.radicale_user, password=settings.radicale_pass)
-        _local.calendar = client.calendar(url=settings.radicale_url)
+        client = caldav.DAVClient(url=settings.caldav_url, username=settings.caldav_user, password=settings.caldav_pass)
+        _local.calendar = client.calendar(url=settings.caldav_url)
     return _local.calendar
 
 
@@ -210,7 +210,7 @@ def create_event(summary: str, start, end, description: str | None, location: st
 
     c_start, c_end = event_bounds(_fetch(uid)[1])
     if not (_close(c_start, start) and _close(c_end, end)):
-        raise RuntimeError("l'événement relu sur Radicale ne correspond pas aux horaires demandés")
+        raise RuntimeError("l'événement relu sur le serveur CalDAV ne correspond pas aux horaires demandés")
     return {"uid": uid, "summary": summary, "start": c_start, "end": c_end}
 
 
@@ -234,11 +234,11 @@ def update_event(uid: str, *, summary=None, start=None, end=None, description=No
     c = _fetch(uid)[1]
     c_start, c_end = event_bounds(c)
     if start and not _close(c_start, start):
-        raise RuntimeError("relecture : la date de début n'a pas été modifiée sur Radicale")
+        raise RuntimeError("relecture : la date de début n'a pas été modifiée sur le serveur CalDAV")
     if end and not _close(c_end, end):
-        raise RuntimeError("relecture : la date de fin n'a pas été modifiée sur Radicale")
+        raise RuntimeError("relecture : la date de fin n'a pas été modifiée sur le serveur CalDAV")
     if summary and _text(c, "SUMMARY") != summary:
-        raise RuntimeError("relecture : le titre n'a pas été modifié sur Radicale")
+        raise RuntimeError("relecture : le titre n'a pas été modifié sur le serveur CalDAV")
     return {"uid": uid, "summary": summary or old_summary, "start": c_start, "end": c_end}
 
 
@@ -263,11 +263,11 @@ def delete_event(uid: str) -> dict:
         _fetch(uid)
     except LookupError:
         return {"uid": uid, "summary": summary, "start": start, "end": end}
-    raise RuntimeError("l'événement est toujours présent sur Radicale après suppression")
+    raise RuntimeError("l'événement est toujours présent sur le serveur CalDAV après suppression")
 
 
 # ---------------------------------------------------------------------------
-# Liste de courses : UN événement, à l'heure voulue, dans l'agenda courses dédié (RADICALE_SHOPPING_URL),
+# Liste de courses : UN événement, à l'heure voulue, dans l'agenda courses dédié (CALDAV_SHOPPING_URL),
 # avec la checklist par rayon dans la description (visible dans n'importe quelle app de calendrier).
 # ---------------------------------------------------------------------------
 
@@ -277,9 +277,9 @@ SHOPPING_UID_SUFFIX = "@running-coach-shopping"
 def get_shopping_calendar():
     """Comme get_calendar : un client par thread."""
     if getattr(_local, "shopping", None) is None:
-        client = caldav.DAVClient(url=settings.radicale_shopping_url, username=settings.radicale_user,
-                                  password=settings.radicale_pass)
-        _local.shopping = client.calendar(url=settings.radicale_shopping_url)
+        client = caldav.DAVClient(url=settings.caldav_shopping_url, username=settings.caldav_user,
+                                  password=settings.caldav_pass)
+        _local.shopping = client.calendar(url=settings.caldav_shopping_url)
     return _local.shopping
 
 
@@ -393,4 +393,4 @@ def set_shopping_description(uid: str, description: str) -> None:
     obj.save()
     __, comp = parse_vevent(get_shopping_calendar().get_event_by_uid(uid).data)
     if _text(comp, "DESCRIPTION") != description:
-        raise RuntimeError("relecture : la checklist n'a pas été mise à jour sur Radicale")
+        raise RuntimeError("relecture : la checklist n'a pas été mise à jour sur le serveur CalDAV")

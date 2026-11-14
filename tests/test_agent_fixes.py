@@ -1,7 +1,7 @@
 import asyncio
 from types import SimpleNamespace as NS
 
-from running_coach import agent, dreeve, dreeve_mcp, tools
+from running_coach import agent, dreeve, dreeve_mcp, llm, tools
 from running_coach.memory import Store
 
 
@@ -63,14 +63,14 @@ def _stock_then(text):
 
 def test_stock_update_reply_gets_no_warning(tmp_path, monkeypatch):
     _setup(tmp_path, monkeypatch)
-    monkeypatch.setattr(agent, "_client", NS(messages=_stock_then("C'est noté, j'ai mis à jour ton stock 👌")))
+    monkeypatch.setattr(agent, "_llm", llm.AnthropicLLM(NS(messages=_stock_then("C'est noté, j'ai mis à jour ton stock 👌"))))
     reply = asyncio.run(agent.ask("stock", chat_id="1"))
     assert "rien n'a changé" not in reply.text
 
 
 def test_calendar_claim_after_only_a_stock_update_is_still_flagged(tmp_path, monkeypatch):
     _setup(tmp_path, monkeypatch)   # une action non-agenda ne doit pas masquer une fausse promesse d'agenda
-    monkeypatch.setattr(agent, "_client", NS(messages=_stock_then("J'ai déplacé ta séance de jeudi à vendredi.")))
+    monkeypatch.setattr(agent, "_llm", llm.AnthropicLLM(NS(messages=_stock_then("J'ai déplacé ta séance de jeudi à vendredi."))))
     reply = asyncio.run(agent.ask("stock", chat_id="1"))
     assert "rien n'a changé dans ton agenda" in reply.text
 
@@ -78,7 +78,7 @@ def test_calendar_claim_after_only_a_stock_update_is_still_flagged(tmp_path, mon
 def test_false_claim_without_any_action_is_flagged(tmp_path, monkeypatch):
     _setup(tmp_path, monkeypatch)
     fake = FakeMessages([_text("J'ai déplacé ta séance de jeudi à vendredi.")])
-    monkeypatch.setattr(agent, "_client", NS(messages=fake))
+    monkeypatch.setattr(agent, "_llm", llm.AnthropicLLM(NS(messages=fake)))
     reply = asyncio.run(agent.ask("décale", chat_id="1"))
     assert "rien n'a changé dans ton agenda" in reply.text
 
@@ -86,12 +86,12 @@ def test_false_claim_without_any_action_is_flagged(tmp_path, monkeypatch):
 def test_ask_timeout_goes_through_error_path_and_frees_lock(tmp_path, monkeypatch):
     store = _setup(tmp_path, monkeypatch)
     monkeypatch.setattr(agent, "ASK_TIMEOUT_S", 0.05)
-    monkeypatch.setattr(agent, "_client", NS(messages=HangingMessages()))
+    monkeypatch.setattr(agent, "_llm", llm.AnthropicLLM(NS(messages=HangingMessages())))
 
     async def scenario():
         first = await agent.ask("salut", chat_id="1")
         assert not agent._lock.locked()
-        monkeypatch.setattr(agent, "_client", NS(messages=FakeMessages([_text("Coucou !")])))
+        monkeypatch.setattr(agent, "_llm", llm.AnthropicLLM(NS(messages=FakeMessages([_text("Coucou !")]))))
         monkeypatch.setattr(agent, "ASK_TIMEOUT_S", 5)
         return first, await agent.ask("re", chat_id="1")
 
@@ -105,7 +105,7 @@ def test_corrective_retries_are_capped(tmp_path, monkeypatch):
     _setup(tmp_path, monkeypatch)
     long_dodge = "Je ne peux pas faire ça. " + "blabla " * 300
     fake = FakeMessages([_text(""), _text(long_dodge), _text(long_dodge), _text(long_dodge), _text(long_dodge)])
-    monkeypatch.setattr(agent, "_client", NS(messages=fake))
+    monkeypatch.setattr(agent, "_llm", llm.AnthropicLLM(NS(messages=fake)))
     asyncio.run(agent.ask("ok", chat_id="1"))
     assert len(fake.calls) <= 3
 

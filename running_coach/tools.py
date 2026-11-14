@@ -287,7 +287,7 @@ def tool_save_shopping_list(args: dict, ledger: Ledger) -> dict:
 
     # Agenda courses : créneau demandé, sinon celui de la liste en cours (liste modifiée → même événement mis à jour).
     slot = None
-    if settings.radicale_shopping_url:
+    if settings.caldav_shopping_url:
         previous = store.shopping_list
         if args.get("start_time"):
             start = cs.parse_dt(args["start_time"])
@@ -337,7 +337,7 @@ _LOCATION_PROP = {
 
 LIST_TOOL = {
     "name": "list_calendar_events",
-    "description": "Relit les événements du calendrier Radicale sur une plage (dates ISO, la date de fin seule inclut toute la journée). Utile pour vérifier l'état réel après tes modifications ou pour voir au-delà des données fournies.",
+    "description": "Relit les événements de l'agenda d'entraînement sur une plage (dates ISO, la date de fin seule inclut toute la journée). Utile pour vérifier l'état réel après tes modifications ou pour voir au-delà des données fournies.",
     "input_schema": {
         "type": "object",
         "properties": {
@@ -351,7 +351,7 @@ LIST_TOOL = {
 WRITE_TOOLS = [
     {
         "name": "create_calendar_event",
-        "description": "Crée un événement d'ENTRAÎNEMENT (séance, repos, course à pied) dans l'agenda d'entraînement Radicale, futur uniquement. Jamais pour des courses alimentaires ou un repas. Heures sans fuseau = fuseau local de l'athlète. La description doit être multi-lignes avec émojis.",
+        "description": "Crée un événement d'ENTRAÎNEMENT (séance, repos, course à pied) dans l'agenda d'entraînement, futur uniquement. Jamais pour des courses alimentaires ou un repas. Heures sans fuseau = fuseau local de l'athlète. La description doit être multi-lignes avec émojis.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -493,7 +493,7 @@ _SHOPPING_CALENDAR = (
     "créneau start_time, avec la checklist par rayon dans sa description, tenue à jour quand l'athlète coche ; cela "
     "remplace la précédente liste à venir du coach, et ce que l'athlète a créé lui-même n'est jamais touché. Heure : "
     "celle demandée, sinon sa préférence en mémoire, sinon un créneau raisonnable que tu annonces."
-    if settings.radicale_shopping_url else " (Aucun agenda courses n'est configuré : start_time est ignoré.)"
+    if settings.caldav_shopping_url else " (Aucun agenda courses n'est configuré : start_time est ignoré.)"
 )
 
 SHOPPING_TOOLS = [

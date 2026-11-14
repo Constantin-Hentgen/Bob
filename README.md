@@ -26,23 +26,24 @@ Bob ▸ Vas-y tranquille, t'as encore de la fatigue dans les jambes 😮‍💨
 
 ## Features
 
-- 📅 **Plans in your CalDAV calendar** (Radicale), backward from your goals; every write is checked on the server
+- 📅 **Plans in your CalDAV calendar** (Radicale, Nextcloud, Baïkal, Fastmail, iCloud…), backward from your goals; every write is checked on the server
 - 🏃 **Uses your Dreeve data**: load, whole run history, a debrief and check-in after each run
 - 🌧️ **Weather alerts** per session and training place
 - 🥗 **Meals and nutrition**: meal ideas, shopping checklist, stock, food log computed from the Ciqual table
 - 🗺️ **Running loops** around home or work, as maps and GPX files
 - 🎙️ **Voice notes** transcribed locally, 🧠 **memory** of your preferences, 🌍 French or English, single-user and self-hosted
+- 🤖 **Bring your own model**: Anthropic, OpenAI, DeepSeek, Mistral, OpenRouter, Groq, Gemini, or a local Ollama / LM Studio / vLLM server
 
 ## Installation
 
-Requirements: Docker with Compose, an [Anthropic](https://console.anthropic.com/settings/keys) API key, a Telegram bot from [@BotFather](https://t.me/BotFather) and a CalDAV calendar dedicated to running. See [Compatibility](https://github.com/Constantin-Hentgen/Running-Coach/wiki/Compatibility).
+Requirements: Docker with Compose, an LLM that can call tools (an API key from Anthropic, OpenAI, DeepSeek, Mistral… or a local server), a Telegram bot from [@BotFather](https://t.me/BotFather) and a calendar dedicated to running on any CalDAV server. See [Compatibility](https://github.com/Constantin-Hentgen/Running-Coach/wiki/Compatibility).
 
 1. Get the code and create your configuration:
    ```bash
    git clone https://github.com/Constantin-Hentgen/Running-Coach.git && cd Running-Coach
    cp .env.example .env
    ```
-2. Fill in `.env`: at least `ANTHROPIC_API_KEY`, `TELEGRAM_BOT_TOKEN`, `RADICALE_URL`, `RADICALE_USER`, `RADICALE_PASS`, and `BOT_LANGUAGE=en` for English ([all options](https://github.com/Constantin-Hentgen/Running-Coach/wiki/Configuration)).
+2. Fill in `.env`: at least `LLM_PROVIDER` + `LLM_API_KEY` (+ `LLM_MODEL` for most providers), `TELEGRAM_BOT_TOKEN`, `CALDAV_URL`, `CALDAV_USER`, `CALDAV_PASS`, and `BOT_LANGUAGE=en` for English ([all options](https://github.com/Constantin-Hentgen/Running-Coach/wiki/Configuration)).
 3. Build and start it:
    ```bash
    docker compose up -d --build

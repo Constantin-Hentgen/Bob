@@ -315,7 +315,7 @@ def test_shopping_tool_checklist_and_calendar_event(tmp_path, monkeypatch):
     monkeypatch.setattr(tools.cs, "save_shopping_event", fake_save)
 
     # Sans agenda courses : checklist seule, start_time ignoré
-    monkeypatch.setattr(tools, "settings", dataclasses.replace(tools.settings, radicale_shopping_url=None))
+    monkeypatch.setattr(tools, "settings", dataclasses.replace(tools.settings, caldav_shopping_url=None))
     ledger = tools.Ledger()
     out = tools.tool_save_shopping_list({"items": ITEMS, "start_time": "2026-11-09T15:00:00", "days_covered": 7,
                                          "coverage": "déjeuners et dîners, 1 personne",
@@ -328,7 +328,7 @@ def test_shopping_tool_checklist_and_calendar_event(tmp_path, monkeypatch):
     assert tools.build_report(ledger, False) == ""   # la checklist suit la réponse, rien à signaler
 
     # Avec agenda courses : événement au créneau voulu, rattaché à la liste
-    monkeypatch.setattr(tools, "settings", dataclasses.replace(tools.settings, radicale_shopping_url="https://dav/shop/"))
+    monkeypatch.setattr(tools, "settings", dataclasses.replace(tools.settings, caldav_shopping_url="https://dav/shop/"))
     ledger = tools.Ledger()
     out = tools.tool_save_shopping_list({"items": ITEMS, "start_time": "2026-11-09T15:00:00"}, ledger)
     (items, start, end), = calls
@@ -480,7 +480,7 @@ def test_list_edit_updates_same_calendar_slot_and_time_is_required(tmp_path, mon
     from running_coach import tools
     store = Store(tmp_path / "s.json")
     monkeypatch.setattr(tools, "store", store)
-    monkeypatch.setattr(tools, "settings", dataclasses.replace(tools.settings, radicale_shopping_url="https://dav/shop/"))
+    monkeypatch.setattr(tools, "settings", dataclasses.replace(tools.settings, caldav_shopping_url="https://dav/shop/"))
     slots = []
 
     def fake_save(lst, start, end):

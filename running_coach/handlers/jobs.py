@@ -16,9 +16,9 @@ logger = logging.getLogger(__name__)
 
 
 MORNING_PROMPT = (
-    "Réalise le briefing matinal. Analyse l'agenda Radicale, la météo, la charge, mon historique Dreeve, mes ressentis et "
+    "Réalise le briefing matinal. Analyse l'agenda d'entraînement, la météo, la charge, mon historique Dreeve, mes ressentis et "
     "le compte à rebours de mes objectifs, en appliquant tout ce que tu sais de moi. "
-    f"Met à jour / planifie les {settings.planning_horizon_days} prochains jours dans Radicale, en cohérence avec la "
+    f"Met à jour / planifie les {settings.planning_horizon_days} prochains jours dans l'agenda, en cohérence avec la "
     "périodisation vers mon objectif principal.\n"
     "Fais-le en silence : ne me parle pas des semaines à venir ni de l'état du plan.\n"
     "Puis envoie-moi un petit mot du matin, comme un pote : 1 ou 2 messages d'une ligne (séparés par une ligne vide), "

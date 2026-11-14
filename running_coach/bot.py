@@ -200,7 +200,7 @@ class CoachBot(InfoMixin, KitchenMixin, MealsMixin, RunsMixin, JobsMixin):
             reply = await agent.ask(prompt, chat_id=str(update.effective_chat.id), allow_writes=allow_writes, planning=planning)
         except Exception as e:
             logger.exception("Erreur non gérée")
-            reply = agent.AgentReply(_("❌ Erreur technique : {error}. Rien n'est garanti côté Radicale, vérifie l'agenda.").format(error=type(e).__name__))
+            reply = agent.AgentReply(_("❌ Erreur technique : {error}. Rien n'est garanti côté agenda, vérifie-le.").format(error=type(e).__name__))
         finally:
             typing.cancel()
         await self._deliver(reply, header, update)

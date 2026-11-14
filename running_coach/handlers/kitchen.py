@@ -67,7 +67,7 @@ class KitchenMixin:
         if not update.message or not await self._authorized(update):
             return
         days = commands.parse_days(context.args or [], commands.SHOPPING_DEFAULT_DAYS, commands.SHOPPING_MAX_DAYS)
-        prompt = commands.shopping_prompt(days, datetime.datetime.now(TZ).date(), bool(settings.radicale_shopping_url))
+        prompt = commands.shopping_prompt(days, datetime.datetime.now(TZ).date(), bool(settings.caldav_shopping_url))
         await self._ask_and_reply(update, prompt, allow_writes=False)
 
     async def _on_pantry_check(self, update: Update, still_there: bool, pantry_id: str) -> None:

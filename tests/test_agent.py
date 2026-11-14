@@ -1,7 +1,7 @@
 import asyncio
 from types import SimpleNamespace as NS
 
-from running_coach import agent, dreeve_mcp, tools
+from running_coach import agent, dreeve_mcp, llm, tools
 from running_coach.memory import Store
 
 SEED = [("contrainte", "Présentiel bureau lundi, mercredi et vendredi")]
@@ -57,7 +57,7 @@ def test_ask_learns_preference_and_routes_mcp(tmp_path, monkeypatch):
     ])
     final = NS(stop_reason="end_turn", usage=_usage(), content=[NS(type="text", text="C'est noté, on garde ça.")])
     fake = FakeMessages([tool_round, final])
-    monkeypatch.setattr(agent, "_client", NS(messages=fake))
+    monkeypatch.setattr(agent, "_llm", llm.AnthropicLLM(NS(messages=fake)))
 
     out = asyncio.run(agent.ask("Je préfère faire mon fractionné le mardi soir", chat_id="42")).text
 
@@ -92,7 +92,7 @@ def test_read_only_mode_hides_calendar_writes(tmp_path, monkeypatch):
     monkeypatch.setattr(dreeve_mcp, "load_tools", no_tools)
     final = NS(stop_reason="end_turn", usage=_usage(), content=[NS(type="text", text="Bon run !")])
     fake = FakeMessages([final])
-    monkeypatch.setattr(agent, "_client", NS(messages=fake))
+    monkeypatch.setattr(agent, "_llm", llm.AnthropicLLM(NS(messages=fake)))
 
     asyncio.run(agent.ask("debrief", chat_id="1", allow_writes=False))
     names = {t["name"] for t in fake.calls[0]["tools"]}
@@ -119,7 +119,7 @@ def test_planning_model_and_proposal_without_false_claim_warning(tmp_path, monke
     final = NS(stop_reason="end_turn", usage=_usage(),
                content=[NS(type="text", text="Je te propose de déplacer le seuil à vendredi.")])
     fake = FakeMessages([propose, final])
-    monkeypatch.setattr(agent, "_client", NS(messages=fake))
+    monkeypatch.setattr(agent, "_llm", llm.AnthropicLLM(NS(messages=fake)))
 
     reply = asyncio.run(agent.ask("bilan", chat_id="1", allow_writes=False, planning=True))
     assert fake.calls[0]["model"] == agent.settings.planning_model
@@ -158,7 +158,7 @@ def test_announced_proposal_without_tool_call_is_retried(tmp_path, monkeypatch):
         NS(type="tool_use", id="p1", name="propose_change", input={"summary": "Semaine allégée à 15 km", "change": "détail"})])
     final = NS(stop_reason="end_turn", usage=_usage(), content=[NS(type="text", text="Voici la proposition.")])
     fake = FakeMessages([forgot, propose, final])
-    monkeypatch.setattr(agent, "_client", NS(messages=fake))
+    monkeypatch.setattr(agent, "_llm", llm.AnthropicLLM(NS(messages=fake)))
 
     reply = asyncio.run(agent.ask("tu proposes quoi ?", chat_id="1"))
     assert [label for _, label in reply.proposals] == ["Semaine allégée à 15 km"]
@@ -220,7 +220,7 @@ def test_empty_reply_is_retried_once(tmp_path, monkeypatch):
     empty = NS(stop_reason="end_turn", usage=_usage(), content=[])
     final = NS(stop_reason="end_turn", usage=_usage(), content=[NS(type="text", text="C'est noté.")])
     fake = FakeMessages([empty, final])
-    monkeypatch.setattr(agent, "_client", NS(messages=fake))
+    monkeypatch.setattr(agent, "_llm", llm.AnthropicLLM(NS(messages=fake)))
     reply = asyncio.run(agent.ask("ok", chat_id="1"))
     assert reply.text == "C'est noté." and len(fake.calls) == 2
 
@@ -253,7 +253,7 @@ def test_dodging_reply_is_retried_once(tmp_path, monkeypatch):
     dodge = NS(stop_reason="end_turn", usage=_usage(), content=[NS(type="text", text="Je ne suis pas sûr de ce que tu vises.")])
     final = NS(stop_reason="end_turn", usage=_usage(), content=[NS(type="text", text="Non : +58 % c'est trop.")])
     fake = FakeMessages([dodge, final])
-    monkeypatch.setattr(agent, "_client", NS(messages=fake))
+    monkeypatch.setattr(agent, "_llm", llm.AnthropicLLM(NS(messages=fake)))
     reply = asyncio.run(agent.ask("c'est une bonne idée ?", chat_id="1"))
     assert reply.text == "Non : +58 % c'est trop." and len(fake.calls) == 2
     assert {"role": "user", "content": agent.DODGE_NUDGE} in fake.calls[1]["messages"]
@@ -273,7 +273,7 @@ def test_skip_marker_returns_nothing_and_keeps_history_clean(tmp_path, monkeypat
     monkeypatch.setattr(agent, "_gather_context", fake_context)
     monkeypatch.setattr(dreeve_mcp, "load_tools", no_tools)
     skip = NS(stop_reason="end_turn", usage=_usage(), content=[NS(type="text", text="« PAS_DE_SUGGESTION »")])
-    monkeypatch.setattr(agent, "_client", NS(messages=FakeMessages([skip])))
+    monkeypatch.setattr(agent, "_llm", llm.AnthropicLLM(NS(messages=FakeMessages([skip]))))
     reply = asyncio.run(agent.ask("repas ?", chat_id="1", allow_writes=False, skip_marker="PAS_DE_SUGGESTION"))
     assert reply.text == "" and not reply.meals and store.history("1") == []
 
@@ -294,7 +294,7 @@ def test_too_long_reply_is_rewritten_once(tmp_path, monkeypatch):
     wall = NS(stop_reason="end_turn", usage=_usage(), content=[NS(type="text", text="Bla bla. " * 120)])
     short = NS(stop_reason="end_turn", usage=_usage(), content=[NS(type="text", text="Bonne séance.\n\nOn garde jeudi ?")])
     fake = FakeMessages([wall, short])
-    monkeypatch.setattr(agent, "_client", NS(messages=fake))
+    monkeypatch.setattr(agent, "_llm", llm.AnthropicLLM(NS(messages=fake)))
     reply = asyncio.run(agent.ask("ça va ?", chat_id="1"))
     assert reply.text == "Bonne séance.\n\nOn garde jeudi ?" and len(fake.calls) == 2
     assert {"role": "user", "content": agent.TOO_LONG_NUDGE} in fake.calls[1]["messages"]
@@ -321,7 +321,7 @@ def test_tool_calls_written_as_text_are_retried_and_never_shown(tmp_path, monkey
         "title": "Tortilla pommes de terre", "recipe": "1. Cuire", "uses": [{"name": "Œufs"}]})])
     final = NS(stop_reason="end_turn", usage=_usage(), content=[NS(type="text", text="🍽️ Tortilla · ⏱️ 25 min\n[propose_meal]")])
     fake = FakeMessages([first, call, final])
-    monkeypatch.setattr(agent, "_client", NS(messages=fake))
+    monkeypatch.setattr(agent, "_llm", llm.AnthropicLLM(NS(messages=fake)))
     reply = asyncio.run(agent.ask("/eat", chat_id="1", allow_writes=False))
     assert [t for _, t in reply.meals] == ["Tortilla pommes de terre"]               # vraiment appelé
     nudge = agent.PSEUDO_TOOL_NUDGE.format(names="propose_meal")

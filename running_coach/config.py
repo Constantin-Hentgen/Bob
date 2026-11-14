@@ -111,13 +111,43 @@ def _weekly_time(value: str | None, name: str = "WEEKLY_REVIEW_TIME") -> tuple[i
         raise ValueError(f"{name} doit être au format « sun 19:00 » ou « off » (reçu : {value!r})") from None
 
 
+# Fournisseurs de modèles : URL de l'API (compatible OpenAI sauf Anthropic), modèles par défaut (conversation,
+# bilan de la semaine) quand le fournisseur a des alias stables, tokens max par réponse. Sans modèle par défaut,
+# LLM_MODEL est requis. « openai-compatible » : n'importe quel serveur Chat Completions (LLM_BASE_URL requis).
+LLM_PROVIDERS = {
+    "anthropic": (None, "claude-haiku-5-5", "claude-sonnet-5-5", 16000),
+    "openai": ("https://api.openai.com/v1", None, None, 8000),
+    "deepseek": ("https://api.deepseek.com", "deepseek-chat", None, 8000),
+    "mistral": ("https://api.mistral.ai/v1", "mistral-small-latest", "mistral-large-latest", 8000),
+    "openrouter": ("https://openrouter.ai/api/v1", None, None, 8000),
+    "groq": ("https://api.groq.com/openai/v1", None, None, 8000),
+    "gemini": ("https://generativelanguage.googleapis.com/v1beta/openai", None, None, 8000),
+    "ollama": ("http://host.docker.internal:11434/v1", None, None, 8000),
+    "openai-compatible": (None, None, None, 8000),
+}
+
+
+def _llm_provider(value: str | None, base_url: str | None) -> str:
+    """LLM_PROVIDER ; à défaut, une URL d'API seule désigne un serveur compatible OpenAI, sinon Anthropic."""
+    if not value:
+        return "openai-compatible" if base_url else "anthropic"
+    provider = value.strip().lower().replace("_", "-")
+    if provider in ("openai-compat", "compatible", "custom", "lmstudio", "lm-studio", "vllm", "llamacpp", "llama.cpp"):
+        provider = "openai-compatible"
+    if provider == "claude":
+        provider = "anthropic"
+    if provider not in LLM_PROVIDERS:
+        raise ValueError(f"LLM_PROVIDER={value!r} inconnu : {', '.join(LLM_PROVIDERS)}")
+    return provider
+
+
 def _shopping_url(value: str | None, training_url: str | None) -> str | None:
     """Agenda courses : désactivé s'il est vide, « off », ou identique à l'agenda d'entraînement (les événements
     courses s'y mêleraient aux séances)."""
     value = _optional_model(value)
     if value and training_url and value.rstrip("/") == training_url.rstrip("/"):
-        logger.error("[CONFIG] RADICALE_SHOPPING_URL est l'agenda d'entraînement : liste de courses non enregistrée "
-                     "dans Radicale. Indique l'URL de ton agenda courses dédié.")
+        logger.error("[CONFIG] CALDAV_SHOPPING_URL est l'agenda d'entraînement : liste de courses non enregistrée "
+                     "dans l'agenda. Indique l'URL de ton agenda courses dédié.")
         return None
     return value
 
@@ -138,8 +168,10 @@ def _weather_locations() -> list[tuple[str, float, float]]:
 
 @dataclass(frozen=True)
 class Settings:
-    # Anthropic
-    anthropic_api_key: str | None
+    # Modèle de langage (LLM_PROVIDER)
+    llm_provider: str
+    llm_api_key: str | None
+    llm_base_url: str | None
     model: str
     planning_model: str
     max_output_tokens: int
@@ -147,11 +179,11 @@ class Settings:
     # Telegram
     telegram_bot_token: str | None
     telegram_chat_id: str | None
-    # Radicale (CalDAV)
-    radicale_url: str | None
-    radicale_user: str | None
-    radicale_pass: str | None
-    radicale_shopping_url: str | None
+    # Agenda CalDAV (Radicale, Nextcloud, Baïkal, Fastmail, iCloud…)
+    caldav_url: str | None
+    caldav_user: str | None
+    caldav_pass: str | None
+    caldav_shopping_url: str | None
     # Dreeve
     dreeve_url: str | None
     dreeve_api_key: str | None
@@ -197,19 +229,28 @@ class Settings:
     def from_env(cls) -> "Settings":
         # DREEVE_URL est la variable recommandée ; DREEVE_API_URL reste acceptée (ancien nom).
         dreeve_url = _instance_root(_str("DREEVE_URL") or _str("DREEVE_API_URL"))
+        # Modèle : variables LLM_* ; les anciens noms ANTHROPIC_API_KEY et CLAUDE_* restent acceptés.
+        base_url = _str("LLM_BASE_URL")
+        provider = _llm_provider(_str("LLM_PROVIDER"), base_url)
+        preset_url, preset_model, preset_planning, preset_tokens = LLM_PROVIDERS[provider]
+        model = _str("LLM_MODEL") or _str("CLAUDE_MODEL") or preset_model or ""
+        caldav_url = _str("CALDAV_URL") or _str("RADICALE_URL")
         return cls(
-            anthropic_api_key=_str("ANTHROPIC_API_KEY"),
-            model=_str("CLAUDE_MODEL", "claude-haiku-5-5"),
-            planning_model=_str("CLAUDE_PLANNING_MODEL", "claude-sonnet-5-5"),
-            max_output_tokens=_int("CLAUDE_MAX_TOKENS", 16000),
-            max_tool_rounds=_int("CLAUDE_MAX_TOOL_ROUNDS", 25),
+            llm_provider=provider,
+            llm_api_key=_str("LLM_API_KEY") or _str("ANTHROPIC_API_KEY"),
+            llm_base_url=(base_url or preset_url or "").rstrip("/") or None,
+            model=model,
+            planning_model=_str("LLM_PLANNING_MODEL") or _str("CLAUDE_PLANNING_MODEL") or preset_planning or model,
+            max_output_tokens=_int("LLM_MAX_TOKENS", _int("CLAUDE_MAX_TOKENS", preset_tokens)),
+            max_tool_rounds=_int("LLM_MAX_TOOL_ROUNDS", _int("CLAUDE_MAX_TOOL_ROUNDS", 25)),
             telegram_bot_token=_str("TELEGRAM_BOT_TOKEN"),
             telegram_chat_id=_str("TELEGRAM_CHAT_ID"),
-            radicale_url=_str("RADICALE_URL"),
-            radicale_user=_str("RADICALE_USER"),
-            radicale_pass=_str("RADICALE_PASS"),
-            # Agenda courses dédié (RADICALE_TASKS_URL : ancien nom, encore accepté). Jamais l'agenda d'entraînement.
-            radicale_shopping_url=_shopping_url(_str("RADICALE_SHOPPING_URL") or _str("RADICALE_TASKS_URL"), _str("RADICALE_URL")),
+            caldav_url=caldav_url,
+            caldav_user=_str("CALDAV_USER") or _str("RADICALE_USER"),
+            caldav_pass=_str("CALDAV_PASS") or _str("RADICALE_PASS"),
+            # Agenda courses dédié (RADICALE_SHOPPING_URL, RADICALE_TASKS_URL : anciens noms). Jamais l'agenda d'entraînement.
+            caldav_shopping_url=_shopping_url(
+                _str("CALDAV_SHOPPING_URL") or _str("RADICALE_SHOPPING_URL") or _str("RADICALE_TASKS_URL"), caldav_url),
             dreeve_url=dreeve_url,
             dreeve_api_key=_str("DREEVE_API_KEY"),
             dreeve_mcp_key=_str("DREEVE_MCP_KEY"),
@@ -260,10 +301,14 @@ class Settings:
     def report(self) -> None:
         """Journalise au démarrage ce qui est configuré (sans jamais afficher de secret)."""
         required = {
-            "ANTHROPIC_API_KEY": self.anthropic_api_key,
+            "LLM_MODEL": self.model,
             "TELEGRAM_BOT_TOKEN": self.telegram_bot_token,
-            "RADICALE_URL": self.radicale_url,
+            "CALDAV_URL": self.caldav_url,
         }
+        if self.llm_provider not in ("ollama", "openai-compatible"):   # serveurs locaux : souvent sans clé
+            required["LLM_API_KEY"] = self.llm_api_key
+        if self.llm_provider == "openai-compatible":
+            required["LLM_BASE_URL"] = self.llm_base_url
         for name, value in required.items():
             if not value:
                 logger.error(f"[CONFIG] {name} manquante : le coach ne peut pas fonctionner (voir .env.example).")
@@ -271,13 +316,14 @@ class Settings:
             "TELEGRAM_CHAT_ID (sécurité + briefing + débriefs)": self.telegram_chat_id,
             "Dreeve REST (DREEVE_URL + DREEVE_API_KEY)": self.dreeve_enabled,
             "Dreeve MCP (DREEVE_MCP_KEY)": self.dreeve_mcp_key and self.dreeve_mcp_url,
-            "Liste de courses dans l'agenda courses (RADICALE_SHOPPING_URL)": self.radicale_shopping_url,
+            "Liste de courses dans l'agenda courses (CALDAV_SHOPPING_URL)": self.caldav_shopping_url,
             f"Messages vocaux (WHISPER_MODEL={self.whisper_model or 'off'})": self.whisper_model,
             f"Météo ({', '.join(n for n, __, __ in self.weather_locations) or 'WEATHER_LOCATIONS'})": self.weather_enabled,
         }
         for name, ok in optional.items():
             logger.info(f"[CONFIG] {name} : {'activé' if ok else 'désactivé'}")
-        logger.info(f"[CONFIG] modèles={self.model} (conversation) / {self.planning_model} (planification), "
+        logger.info(f"[CONFIG] fournisseur={self.llm_provider} ({self.llm_base_url or 'api.anthropic.com'}), "
+                    f"modèles={self.model} (conversation) / {self.planning_model} (planification), "
                     f"fuseau={self.tz.key}, briefing={self.briefing_time}, bilan hebdo={self.weekly_review}, "
                     f"vérification du stock={self.pantry_check_time}, questions repas={self.meal_check_times}, suggestions repas={self.eat_suggest_times}, boîtes={self.meal_boxes}, "
                     f"détection runs={self.activity_poll_minutes} min")

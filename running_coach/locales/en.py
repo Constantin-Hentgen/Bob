@@ -16,8 +16,8 @@ MESSAGES: dict[str, str] = {
         '🎙️ “{text}”',
     'Oups, une erreur de mon côté 🥲 Réessaie dans un instant ?':
         'Oops, something went wrong on my side 🥲 Try again in a moment?',
-    "❌ Erreur technique : {error}. Rien n'est garanti côté Radicale, vérifie l'agenda.":
-        '❌ Technical error: {error}. Nothing is guaranteed on the Radicale side, check your calendar.',
+    "❌ Erreur technique : {error}. Rien n'est garanti côté agenda, vérifie-le.":
+        '❌ Technical error: {error}. Nothing is guaranteed on the calendar side, check it.',
     '❌ Erreur technique':
         '❌ Technical error',
     'Déjà traité.':

@@ -6,10 +6,8 @@ import logging
 import re
 from dataclasses import dataclass, field
 
-import anthropic
-
 from . import calendar_store as cs
-from . import coaching, dreeve, dreeve_mcp, nutrition, weather
+from . import coaching, dreeve, dreeve_mcp, llm, nutrition, weather
 from .config import DAYS_LONG, TZ, TZ_LABEL, UTC, settings
 from .i18n import _, language_name
 from .memory import store
@@ -50,7 +48,7 @@ OBJECTIFS ET PÉRIODISATION :
 - Pour les objectifs santé (poids, sommeil…), relie conseils d'entraînement et de nutrition.
 
 DEUX AGENDAS, À NE PAS CONFONDRE :
-- L'agenda d'ENTRAÎNEMENT (Radicale) : séances et repos. Tu le lis dans le contexte et avec `list_calendar_events`, tu le modifies avec les outils `*_calendar_event`. `propose_change` ne concerne QUE lui.
+- L'agenda d'ENTRAÎNEMENT (CalDAV) : séances et repos. Tu le lis dans le contexte et avec `list_calendar_events`, tu le modifies avec les outils `*_calendar_event`. `propose_change` ne concerne QUE lui.
 - L'agenda COURSES : tu ne le lis ni ne l'écris directement. La liste de courses en cours (articles, cochés ou non, créneau) est dans le contexte ; crée une nouvelle liste avec `save_shopping_list`, modifie la liste en cours avec `edit_shopping_list` (l'événement de l'agenda courses suit automatiquement). Fais-le directement quand l'athlète le demande, sans proposition ni confirmation.
 
 STOCK EN CUISINE :
@@ -274,11 +272,10 @@ def last_messages(history: list[dict], n: int) -> list[dict]:
     return tail
 
 
-ANTHROPIC_TIMEOUT_S = 90   # un appel qui reste muet ne doit pas figer le bot
 ASK_TIMEOUT_S = 240        # borne globale d'un message (modèle + outils + relances)
 MAX_CORRECTIVE_RETRIES = 2  # relances correctives max par message
 
-_client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key, timeout=ANTHROPIC_TIMEOUT_S, max_retries=1)
+_llm = llm.from_settings()   # Anthropic ou API compatible OpenAI (LLM_PROVIDER)
 _lock = asyncio.Lock()   # une seule exécution à la fois : pas d'écritures concurrentes
 
 
@@ -295,12 +292,11 @@ class AgentReply:
     gif_moment: str | None = None   # « ouverture » (avant le texte) ou « clôture » (après)
 
 
-def _system_blocks() -> list[dict]:
+def _system_blocks() -> list[str]:
     # Bloc 1 figé ; bloc 2 ne change que lorsque la mémoire ou les objectifs changent → préfixe de cache stable.
     return [
-        {"type": "text", "text": SYSTEM_PROMPT},
-        {"type": "text", "text": f"CE QUE TU SAIS DE L'ATHLÈTE (mémoire durable) :\n{store.render()}\n\n"
-                                 f"OBJECTIFS :\n{store.render_goals()}"},
+        SYSTEM_PROMPT,
+        f"CE QUE TU SAIS DE L'ATHLÈTE (mémoire durable) :\n{store.render()}\n\nOBJECTIFS :\n{store.render_goals()}",
     ]
 
 
@@ -317,8 +313,8 @@ async def _gather_context() -> str:
     else:
         dreeve_text, all_runs = dreeve_ctx
     if isinstance(cal_result, Exception):
-        logger.error(f"Lecture Radicale impossible : {cal_result}")
-        agenda = f"ERREUR DE LECTURE RADICALE : {cal_result}. N'effectue AUCUNE modification et préviens l'utilisateur."
+        logger.error(f"Lecture de l'agenda CalDAV impossible : {cal_result}")
+        agenda = f"ERREUR DE LECTURE DE L'AGENDA : {cal_result}. N'effectue AUCUNE modification et préviens l'utilisateur."
     else:
         events, skipped = cal_result
         agenda = (f"({settings.context_days_ahead} prochains jours, {len(events)} événements, {skipped} illisibles ignorés) avec UID :\n"
@@ -351,13 +347,9 @@ async def _gather_context() -> str:
         + (f"- Échange : {'ce message OUVRE une nouvelle session' if store.session_opening() else 'session en cours'} ; "
            f"GIF : {'possible, seulement pour ouvrir ou clôturer l’échange, et seulement s’il illustre vraiment ton message' if store.gif_available() else 'déjà envoyé dans cette session, plus de GIF'}\n"
            if settings.giphy_api_key else "")
-        + f"- Agenda Radicale {agenda}\n"
+        + f"- Agenda d'entraînement {agenda}\n"
         f"- Dreeve :\n{dreeve_text}"
     )
-
-
-def _text_of(response) -> str:
-    return "\n".join(b.text for b in response.content if b.type == "text").strip()
 
 
 async def _run_loop(messages: list, tools: list, ledger: Ledger, model: str) -> tuple[str, bool]:
@@ -368,42 +360,30 @@ async def _run_loop(messages: list, tools: list, ledger: Ledger, model: str) -> 
     try:
         async with dreeve_mcp.McpRun() as mcp:
             for __ in range(settings.max_tool_rounds):
-                response = await _client.messages.create(
-                    model=model,
-                    max_tokens=settings.max_output_tokens,
-                    system=system,
-                    tools=tools,
-                    messages=messages,
-                    # Cache automatique du préfixe : chaque tour relit outils + prompt + contexte
-                    # + tours précédents au tarif cache au lieu du plein tarif.
-                    cache_control={"type": "ephemeral"},
-                )
-                u = response.usage
-                usage["in"] += u.input_tokens
-                usage["cache_read"] += u.cache_read_input_tokens or 0
-                usage["cache_write"] += u.cache_creation_input_tokens or 0
-                usage["out"] += u.output_tokens
+                response = await _llm.complete(model, system, tools, messages, settings.max_output_tokens)
+                for k, v in response.usage.items():
+                    usage[k] += v
 
-                if response.stop_reason != "tool_use":
-                    return _text_of(response), response.stop_reason == "max_tokens"
+                if not response.tool_calls:
+                    return response.text, response.truncated
 
-                messages.append({"role": "assistant", "content": response.content})
+                messages.append(response.assistant_message())
                 results = []
-                for block in response.content:
-                    if block.type != "tool_use":
-                        continue
-                    if dreeve_mcp.owns(block.name) and block.name in allowed:
-                        result = await mcp.call(block.name, block.input)
+                for call in response.tool_calls:
+                    if call.error:
+                        result = {"ok": False, "error": call.error}
+                    elif dreeve_mcp.owns(call.name) and call.name in allowed:
+                        result = await mcp.call(call.name, call.input)
                     else:
-                        result = await asyncio.to_thread(run_tool, block.name, block.input, ledger, allowed)
+                        result = await asyncio.to_thread(run_tool, call.name, call.input, ledger, allowed)
                     results.append({
                         "type": "tool_result",
-                        "tool_use_id": block.id,
+                        "tool_use_id": call.id,
                         "content": json.dumps(result, ensure_ascii=False, default=str),
                         "is_error": not result.get("ok", False),
                     })
                 messages.append({"role": "user", "content": results})
-            return "", True   # CLAUDE_MAX_TOOL_ROUNDS atteint
+            return "", True   # LLM_MAX_TOOL_ROUNDS atteint
     finally:
         logger.info(f"Tokens : {usage}")
 
@@ -423,7 +403,7 @@ async def ask(user_prompt: str, chat_id: str = "default", allow_writes: bool = T
     """Point d'entrée unique : renvoie le texte à envoyer sur Telegram (compte-rendu inclus) et les propositions.
 
     allow_writes=False : pas d'outils d'écriture d'agenda (mémoire, objectifs, propositions et lecture restent permis).
-    planning=True : modèle de planification (CLAUDE_PLANNING_MODEL), pour le bilan de la semaine uniquement.
+    planning=True : modèle de planification (LLM_PLANNING_MODEL), pour le bilan de la semaine uniquement.
     gif_on_demand : l'athlète a demandé un GIF (/meme) : send_gif sans limite de session.
     skip_marker : le prompt permet au modèle de répondre ce seul mot pour « rien à envoyer » (message système non sollicité) :
     réponse vide, et rien n'entre dans l'historique.

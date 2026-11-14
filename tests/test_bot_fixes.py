@@ -106,7 +106,7 @@ def test_check_weather_swallows_calendar_error(tmp_path, monkeypatch):
     _at(monkeypatch, 10, 0)
 
     def boom(start, end):
-        raise RuntimeError("Radicale injoignable")
+        raise RuntimeError("Agenda injoignable")
 
     monkeypatch.setattr(cs, "list_events", boom)
     monkeypatch.setattr(weather, "fetch_hourly", lambda days=3: _rainy_forecast())
