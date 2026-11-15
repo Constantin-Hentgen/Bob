@@ -309,8 +309,8 @@ def eat_prompt(now: datetime.datetime, spontaneous: bool = False) -> str:
 MEME_PROMPT = (
     "[/meme] Résume ma journée d'entraînement en un GIF ou un mème drôle. Regarde ce qui s'est passé aujourd'hui : "
     "runs du jour (Dreeve), agenda, ressentis, repas, météo. Trouve l'angle drôle et bienveillant (sortie sous la "
-    "pluie, jambes en bois, repos assumé, gros repas, séance sautée…), appelle send_gif avec 2 à 4 mots-clés en "
-    "anglais qui collent pile à ma journée, et écris UNE seule ligne drôle pour l'accompagner, comme un pote. "
+    "pluie, jambes en bois, repos assumé, gros repas, séance sautée…), appelle send_gif avec le mème culte du catalogue "
+    "dont l'usage colle pile à ma journée, et écris UNE seule ligne drôle pour l'accompagner, comme un pote. "
     "Ne modifie rien."
 )
 
