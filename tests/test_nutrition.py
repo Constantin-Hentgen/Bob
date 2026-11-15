@@ -1,9 +1,9 @@
 """Nutrition : table Ciqual, repas pesés, profil, bilan énergétique, /nutrition."""
 import datetime
 
-from running_coach import commands, nutrition, tools
-from running_coach.config import TZ
-from running_coach.memory import Store
+from bob import commands, nutrition, tools
+from bob.config import TZ
+from bob.memory import Store
 
 
 def test_ciqual_search_prefers_the_right_generic_food():

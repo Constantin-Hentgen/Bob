@@ -5,8 +5,8 @@ import json
 import httpx
 import pytest
 
-from running_coach import agent, config, dreeve_mcp, llm, tools
-from running_coach.memory import Store
+from bob import agent, config, dreeve_mcp, llm, tools
+from bob.memory import Store
 
 LLM_VARS = ("LLM_PROVIDER", "LLM_API_KEY", "LLM_BASE_URL", "LLM_MODEL", "LLM_PLANNING_MODEL", "LLM_MAX_TOKENS",
             "ANTHROPIC_API_KEY", "CLAUDE_MODEL", "CLAUDE_PLANNING_MODEL", "CLAUDE_MAX_TOKENS")

@@ -1,8 +1,8 @@
 """Voix de Bob (#59) : pas de fausse alerte, pas de texte de robot, pas d'identifiant ni de statut brut."""
 import datetime
 
-from running_coach import agent, commands, dreeve, tools
-from running_coach.memory import Store
+from bob import agent, commands, dreeve, tools
+from bob.memory import Store
 
 
 def test_a_plan_summary_is_not_taken_for_a_calendar_change():
@@ -66,7 +66,7 @@ def test_tics_are_detected_and_ordinary_sentences_are_not():
 def test_a_reply_with_a_tic_is_rewritten_once(tmp_path, monkeypatch):
     import asyncio
     from types import SimpleNamespace as NS
-    from running_coach import dreeve_mcp, llm
+    from bob import dreeve_mcp, llm
 
     store = Store(tmp_path / "state.json")
     monkeypatch.setattr(agent, "store", store)

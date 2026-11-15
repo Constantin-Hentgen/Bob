@@ -1,7 +1,7 @@
 services:
-  running-coach:
+  bob:
     build: .
-    container_name: running-coach
+    container_name: bob
     restart: unless-stopped
     # Configuration : chaque variable est lue par interpolation ${VAR}, ce qui marche partout :
     # - docker compose en local : lues dans le fichier .env à côté de ce fichier ;

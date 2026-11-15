@@ -1,4 +1,4 @@
-"""English messages, keyed by the French source text (see running_coach/i18n.py)."""
+"""English messages, keyed by the French source text (see bob/i18n.py)."""
 MESSAGES: dict[str, str] = {
     'Je sèche sur celle-là 🥲 Tu peux me la redire autrement ?':
         "I'm stuck on that one 🥲 Can you put it another way?",

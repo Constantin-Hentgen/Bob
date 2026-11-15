@@ -5,14 +5,14 @@ from types import SimpleNamespace as NS
 
 import pytest
 
-from running_coach import agent
-from running_coach import bot as bot_module
-from running_coach.handlers import info, jobs, kitchen, meals, runs, ui
-from running_coach import voice, weather, weather_alerts
-from running_coach import calendar_store as cs
-from running_coach.config import TZ, settings
-from running_coach.memory import Store
-from running_coach.weather_alerts import Hour
+from bob import agent
+from bob import bot as bot_module
+from bob.handlers import info, jobs, kitchen, meals, runs, ui
+from bob import voice, weather, weather_alerts
+from bob import calendar_store as cs
+from bob.config import TZ, settings
+from bob.memory import Store
+from bob.weather_alerts import Hour
 
 
 def _patch_bot(monkeypatch, name, value):

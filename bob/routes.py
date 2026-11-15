@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 
 BROUTER_URL = "https://brouter.de/brouter"
 PROFILE = "hiking-mountain"
-USER_AGENT = "running-coach-bot/1.0 (self-hosted personal assistant)"
+USER_AGENT = "bob-bot/1.0 (self-hosted personal assistant)"
 ROUTE_FACTOR = 1.25          # une boucle suit les rues : ~25 % plus longue que le triangle à vol d'oiseau
 DISTANCE_TOLERANCE = 0.05    # ±5 % de la distance voulue (la distance de la séance)
 DISTANCE_TRIES = 3           # appels BRouter max par orientation (service public : rester sobre)
@@ -346,7 +346,7 @@ def to_gpx(loop: Loop, name: str) -> bytes:
         f'      <trkpt lat="{lat:.6f}" lon="{lon:.6f}">' + (f"<ele>{ele:.0f}</ele>" if ele is not None else "") + "</trkpt>"
         for lat, lon, ele in loop.points)
     return (f'<?xml version="1.0" encoding="UTF-8"?>\n'
-            f'<gpx version="1.1" creator="running-coach" xmlns="http://www.topografix.com/GPX/1/1">\n'
+            f'<gpx version="1.1" creator="bob" xmlns="http://www.topografix.com/GPX/1/1">\n'
             f'  <metadata><name>{escape(name)}</name><copyright author="OpenStreetMap contributors">'
             f'<license>https://opendatacommons.org/licenses/odbl/</license></copyright></metadata>\n'
             f'  <trk><name>{escape(name)}</name><trkseg>\n{pts}\n  </trkseg></trk>\n</gpx>\n').encode("utf-8")

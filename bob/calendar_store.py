@@ -123,7 +123,7 @@ def _set(comp, key: str, value) -> None:
 
 def build_event(uid: str, summary: str, start, end, description: str, location: str | None = None) -> str:
     cal = Calendar()
-    cal.add("prodid", "-//running-coach-agent//FR")
+    cal.add("prodid", "-//bob//FR")
     cal.add("version", "2.0")
     ev = Event()
     ev.add("uid", uid)
@@ -205,7 +205,7 @@ def create_event(summary: str, start, end, description: str | None, location: st
     if end < now_utc():
         raise ValueError("événement dans le passé : refusé")
 
-    uid = f"{uuid.uuid4()}@running-coach"
+    uid = f"{uuid.uuid4()}@running-coach"   # ancien nom du projet, gardé : les événements existants portent ce suffixe
     get_calendar().add_event(build_event(uid, summary, start, end, description or DEFAULT_DESCRIPTION, location))
 
     c_start, c_end = event_bounds(_fetch(uid)[1])
@@ -271,7 +271,7 @@ def delete_event(uid: str) -> dict:
 # avec la checklist par rayon dans la description (visible dans n'importe quelle app de calendrier).
 # ---------------------------------------------------------------------------
 
-SHOPPING_UID_SUFFIX = "@running-coach-shopping"
+SHOPPING_UID_SUFFIX = "@running-coach-shopping"   # ancien nom du projet, gardé : il retrouve les listes déjà écrites
 
 
 def get_shopping_calendar():

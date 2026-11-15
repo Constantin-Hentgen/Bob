@@ -2,10 +2,10 @@ import datetime
 
 import pytest
 
-from running_coach import weather_alerts as wa
-from running_coach.config import TZ, settings
-from running_coach.memory import Store
-from running_coach.weather_alerts import Hour
+from bob import weather_alerts as wa
+from bob.config import TZ, settings
+from bob.memory import Store
+from bob.weather_alerts import Hour
 
 
 def at(day, hour, minute=0):
@@ -169,7 +169,7 @@ def test_alert_state_persists_purges_and_migrates_old_format(tmp_path):
 # --- Météo heure par heure (#41) --------------------------------------------
 
 def test_night_rain_does_not_mark_an_evening_session_wet():
-    from running_coach import weather
+    from bob import weather
     night_rain = {"Maison": hourly(10, {2, 3, 4}, mm=2.0), "Travail": hourly(10)}
     lines = wa.session_lines([event("a", at(10, 18), at(10, 19), location="Maison")], night_rain, NOW)
     assert len(lines) == 1 and "Maison) : sec" in lines[0] and "pluie" not in lines[0]
@@ -187,7 +187,7 @@ def test_session_lines_rain_on_the_slot_skips_rest_and_past_sessions():
 
 
 def test_forecast_text_lists_rain_hours_and_sessions():
-    from running_coach import weather
+    from bob import weather
     saved = settings.weather_locations
     object.__setattr__(settings, "weather_locations", [("Maison", 48.8, 2.3)])
     try:

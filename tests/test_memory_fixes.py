@@ -2,7 +2,7 @@ import os
 
 import pytest
 
-from running_coach.memory import MAX_ITEMS, Store
+from bob.memory import MAX_ITEMS, Store
 
 
 @pytest.fixture

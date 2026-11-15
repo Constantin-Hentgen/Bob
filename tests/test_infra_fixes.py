@@ -6,9 +6,9 @@ import time
 import pytest
 from caldav.lib.error import NotFoundError
 
-from running_coach import calendar_store as cs
-from running_coach import routes
-from running_coach.config import UTC
+from bob import calendar_store as cs
+from bob import routes
+from bob.config import UTC
 
 H = datetime.timedelta(hours=1)
 
@@ -226,12 +226,12 @@ def test_find_loops_deterministic_when_all_fast(monkeypatch):
 # --- App et config -----------------------------------------------------------
 
 def test_app_docs_disabled():
-    from running_coach.app import app
+    from bob.app import app
     assert app.docs_url is None and app.redoc_url is None and app.openapi_url is None
 
 
 def test_nutrition_check_time_default(monkeypatch):
-    from running_coach import config
+    from bob import config
     monkeypatch.delenv("NUTRITION_CHECK_TIME", raising=False)
     src = open(config.__file__, encoding="utf-8").read()
     assert '"NUTRITION_CHECK_TIME", "22:00"' in src
