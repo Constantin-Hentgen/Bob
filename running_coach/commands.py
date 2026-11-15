@@ -8,7 +8,7 @@ from telegram import BotCommand
 
 from . import nutrition
 from .coaching import format_goals, format_pantry
-from .config import DAYS, settings
+from .config import DAYS, DAYS_LONG, TZ, settings
 from .dreeve import format_activity, weekly_volume
 from .formatting import md_escape
 from .i18n import _, decimal, plural
@@ -64,7 +64,7 @@ HELP_TEXT = _("""🏃 *Salut, c'est __BOT_NAME__* 🤖
 /stock — ce que tu as en cuisine : les articles cochés sur ta liste y entrent, les plats que tu marques « mangé » ou « cuisiné » en sortent, et je te demande si les produits frais sont encore là quand ils arrivent à échéance
 /briefing — briefing complet, ajuste le programme dans l'agenda
 /meme — un mème qui résume ta journée d'entraînement 😂
-/routes — 2 ou 3 boucles autour du lieu de ta séance du jour, les plus calmes et sûres (carte + fichier GPX) ; /routes travail 8 nature pour choisir le lieu, la distance et le revêtement
+/routes — 2 ou 3 boucles à la distance et au lieu de ta prochaine séance, les plus calmes et sûres (carte + fichier GPX) ; /routes travail 8 nature pour choisir le lieu, la distance et le revêtement
 /newroute — une boucle jamais courue : /newroute 10 route bois de vincennes (distance, route / nature / mixte, lieu) ; ce qui manque, je te le demande
 /nutrition — ce que tu as mangé aujourd'hui et cette semaine : calories, protéines, glucides, lipides, et si tu manges assez pour ce que tu dépenses (table Ciqual)
 
@@ -86,7 +86,12 @@ def parse_days(args: list[str], default: int = AGENDA_DEFAULT_DAYS, maximum: int
 
 NO_SUGGESTION = "PAS_DE_SUGGESTION"
 DEFAULT_ROUTE_KM = 6.0
-KM_IN_TITLE = re.compile(r"(\d+(?:[.,]\d+)?)\s*km", re.I)
+KM_IN_TITLE = re.compile(r"(\d+(?:[.,]\d+)?)\s*km\b", re.I)
+MINUTES = re.compile(r"(\d+)\s*(?:min|')", re.I)
+PACE = re.compile(r"(\d{1,2}):(\d{2})(?:\s*[-–à]\s*(\d{1,2}):(\d{2}))?\s*/\s*km", re.I)
+DEFAULT_PACE_MIN_KM = 6.5   # distance estimée d'une séance donnée en minutes, sans allure dans sa description
+NOT_A_RUN = ("📊", "🎽", "🏁")   # bilan de la semaine, retrait de dossard, course : pas de boucle à tracer
+SESSION_LOOKAHEAD_DAYS = 7
 
 
 SURFACE_WORDS = {"route": "route", "routes": "route", "road": "route", "bitume": "route", "goudron": "route",
@@ -103,6 +108,7 @@ class RouteAsk:
     km: float | None = None
     surface: str | None = None                      # route | nature | mixte
     query: str = ""                                 # lieu en texte libre, à géocoder
+    session: dict | None = None                     # séance de l'agenda dont viennent le lieu ou la distance
 
 
 def parse_route_args(args: list[str], places: list[tuple[str, float, float]]) -> RouteAsk:
@@ -126,10 +132,33 @@ def parse_route_args(args: list[str], places: list[tuple[str, float, float]]) ->
     return ask
 
 
+def is_run(event: dict) -> bool:
+    """Une séance de course (🏃, ou une distance en km dans le titre), pas un bilan, un retrait de dossard ou une course."""
+    summary = (event.get("summary") or "").strip()
+    return not summary.startswith(NOT_A_RUN) and ("🏃" in summary or bool(KM_IN_TITLE.search(summary)))
+
+
+def session_km(event: dict) -> float | None:
+    """Distance de la séance : titre, sinon description, sinon durée du titre (« Footing 45 min ») × allure de la
+    description (« 7:00-7:15/km », défaut 6:30/km). Les minutes de la description (échauffement…) sont ignorées."""
+    summary, description = event.get("summary") or "", event.get("description") or ""
+    for text in (summary, description):
+        if m := KM_IN_TITLE.search(text):
+            return float(m.group(1).replace(",", "."))
+    minutes = MINUTES.search(summary)
+    if not minutes:
+        return None
+    pace = DEFAULT_PACE_MIN_KM
+    if p := PACE.search(description):
+        paces = [int(p.group(1)) + int(p.group(2)) / 60] + ([int(p.group(3)) + int(p.group(4)) / 60] if p.group(3) else [])
+        pace = sum(paces) / len(paces)
+    return round(int(minutes.group(1)) / pace, 1)
+
+
 def next_session(events: list[dict], now: datetime.datetime | None = None) -> dict | None:
-    """La prochaine séance de course (🏃 ou une distance en km dans le titre) pas encore terminée."""
+    """La prochaine séance de course pas encore terminée."""
     for e in sorted(events, key=lambda e: e.get("start", "")):
-        if not ("🏃" in e.get("summary", "") or KM_IN_TITLE.search(e.get("summary", ""))):
+        if not is_run(e):
             continue
         try:
             if now and datetime.datetime.fromisoformat(e["end"]) <= now:
@@ -145,22 +174,33 @@ def fill_from_session(ask: RouteAsk, places: list[tuple[str, float, float]], eve
     """Ce qui n'est pas donné vient de la prochaine séance : son lieu (connu, ou adresse à géocoder) et sa distance."""
     by_name = {name.casefold(): (name, lat, lon) for name, lat, lon in places}
     run = next_session(events, now)
-    if run:
+    if run and (ask.place is None or ask.km is None):
+        ask.session = run
         location = (run.get("location") or "").strip()
         if ask.place is None and not ask.query and location:
             if location.casefold() in by_name:
                 ask.place = by_name[location.casefold()]
             else:
                 ask.query = location
-        if ask.km is None and (m := KM_IN_TITLE.search(run.get("summary", ""))):
-            ask.km = float(m.group(1).replace(",", "."))
+        if ask.km is None:
+            ask.km = session_km(run)
     if ask.km is not None:
         ask.km = min(max(ask.km, 2.0), 30.0)
     return ask
 
 
+def session_line(event: dict) -> str:
+    """« Pour ta séance de mardi 12:00 (🏃 Footing facile 5 km) » : d'où viennent la distance et le lieu."""
+    try:
+        start = datetime.datetime.fromisoformat(event["start"]).astimezone(TZ)
+        when = f"{DAYS_LONG[start.weekday()]} {start:%H:%M}"
+    except (KeyError, ValueError):
+        when = ""
+    return _("Pour ta séance de {when} ({title}) :").format(when=when, title=event.get("summary", "").strip()).replace("  ", " ")
+
+
 def route_request(args: list[str], places: list[tuple[str, float, float]], today_events: list[dict]) -> tuple:
-    """/routes [lieu] [km] → (nom du lieu, (lat, lon), km). Par défaut : le lieu et la distance de la séance du jour."""
+    """/routes [lieu] [km] → (nom du lieu, (lat, lon), km). Par défaut : le lieu et la distance de la prochaine séance."""
     ask = fill_from_session(parse_route_args(args, places), places, today_events)
     place = ask.place or (places[0] if places else None)
     km = ask.km if ask.km is not None else DEFAULT_ROUTE_KM
@@ -309,8 +349,8 @@ def eat_prompt(now: datetime.datetime, spontaneous: bool = False) -> str:
 MEME_PROMPT = (
     "[/meme] Résume ma journée d'entraînement en un GIF ou un mème drôle. Regarde ce qui s'est passé aujourd'hui : "
     "runs du jour (Dreeve), agenda, ressentis, repas, météo. Trouve l'angle drôle et bienveillant (sortie sous la "
-    "pluie, jambes en bois, repos assumé, gros repas, séance sautée…), appelle send_gif avec 2 à 4 mots-clés en "
-    "anglais qui collent pile à ma journée, et écris UNE seule ligne drôle pour l'accompagner, comme un pote. "
+    "pluie, jambes en bois, repos assumé, gros repas, séance sautée…), appelle send_gif avec le mème culte du catalogue "
+    "dont l'usage colle pile à ma journée, et écris UNE seule ligne drôle pour l'accompagner, comme un pote. "
     "Ne modifie rien."
 )
 

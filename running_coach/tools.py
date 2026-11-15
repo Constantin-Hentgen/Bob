@@ -8,6 +8,7 @@ import requests
 from dataclasses import dataclass, field
 
 from . import calendar_store as cs
+from . import memes
 from . import nutrition, recipes
 from .coaching import box_count
 from .config import settings
@@ -669,21 +670,28 @@ LOG_MEAL_TOOL = {
 GIF_TOOL = {
     "name": "send_gif",
     "description": (
-        "Envoie un GIF ou un mème drôle, comme le ferait un pote, pour OUVRIR un échange (ton premier message d'une "
+        "Envoie un MÈME DE RÉACTION CULTE, de ceux que tout le monde s'envoie (Reddit, Twitter, Discord), comme le "
+        "ferait un pote, pour OUVRIR un échange (ton premier message d'une "
         "session : il part avant ton texte) ou le CLÔTURER (l'échange se termine : merci, à plus, c'est réglé… : il part "
         "après ton texte). Jamais au milieu d'une discussion. Rarement : un seul par session au plus, et seulement quand "
         "il illustre exactement ce que tu dis (une belle séance, la pluie un jour de sortie longue…) ; jamais au hasard, "
-        "jamais sur un sujet sérieux (douleur, blessure, coup dur). Ne le décris pas dans ton message."
+        "jamais sur un sujet sérieux (douleur, blessure, coup dur). Ne le décris pas dans ton message.\n"
+        "Le rire vient de la RECONNAISSANCE du mème et du décalage avec la situation : choisis `meme` dans ce catalogue, "
+        "celui dont l'usage colle pile à ce qui se passe ; si aucun ne colle vraiment, n'envoie pas de GIF.\n"
+        + memes.catalogue()
     ),
     "input_schema": {
         "type": "object",
         "properties": {
-            "query": {"type": "string", "description": "2 à 4 mots-clés EN ANGLAIS décrivant la réaction ou la scène, "
-                      "ex: « proud high five », « running in the rain », « hungry waiting ». Jamais de nom ni d'info personnelle."},
+            "meme": {"type": "string", "enum": list(memes.available()), "description": "le mème du catalogue"},
+            "query": {"type": "string", "description": "seulement si un AUTRE mème culte colle mieux que tout le catalogue : "
+                      "son nom exact tel qu'on le cherche sur GIPHY, EN ANGLAIS (œuvre + personnage + réplique, ex. "
+                      "« office jim stare camera », « bernie sanders mittens »). Jamais une description de scène, jamais de "
+                      "nom ni d'info personnelle."},
             "moment": {"type": "string", "enum": ["ouverture", "clôture"],
                        "description": "ouverture = ton premier message de la session ; clôture = l'échange se termine"},
         },
-        "required": ["query", "moment"],
+        "required": ["moment"],
     },
 }
 
@@ -787,9 +795,16 @@ def tool_send_gif(args: dict, ledger: Ledger) -> dict:
         raise ValueError("moment : « ouverture » ou « clôture »")
     if not on_demand and moment == "ouverture" and not store.session_opening():
         return {"ok": False, "error": "l'échange est déjà en cours : un GIF seulement pour ouvrir (premier message) ou clôturer"}
+    meme = args.get("meme")
+    if meme:
+        if meme not in memes.available():
+            raise ValueError(f"meme inconnu : {meme} (voir le catalogue)")
+        store.mark_gif(cs.now_utc())   # GIF canonique choisi à la main : pas de recherche
+        ledger.record("gif", f"{moment} : {meme}", True, detail=memes.url(meme))
+        return {"ok": True, "note": "Le GIF part avec ton message. Ne le décris pas."}
     query = " ".join(str(args.get("query") or "").split())[:50]
     if not query:
-        raise ValueError("query vide")
+        raise ValueError("choisis un `meme` du catalogue")
     try:
         res = requests.get(GIPHY_SEARCH_URL, timeout=settings.http_timeout, params={
             "api_key": settings.giphy_api_key, "q": query, "limit": 5, "rating": "pg-13", "lang": "en"})

@@ -35,8 +35,9 @@ def test_find_loops_prefers_quiet_distinct_loops_and_never_done(monkeypatch):
     monkeypatch.setattr(routes, "loop_at", fake_loop_at)
     loops = routes.find_loops((48.8, 2.3), 6, 3)
     assert [lp.bearing for lp in loops][:2] == [0, 180]                     # les plus calmes d'abord
-    assert all(min(abs(a.bearing - b.bearing), 360 - abs(a.bearing - b.bearing)) >= 90
-               for i, a in enumerate(loops) for b in loops[i + 1:])        # orientations différentes
+    assert len(loops) == 3 and all(min(abs(a.bearing - b.bearing), 360 - abs(a.bearing - b.bearing)) >= 60
+                                   for i, a in enumerate(loops) for b in loops[i + 1:])   # orientations différentes
+    # 0° et 180° pris d'abord laissent 60° au plus aux autres : l'écart est relâché pour en avoir 3
     already = [{"encodedPolyline": ""}]
     new = routes.find_loops((48.8, 2.3), 6, 1, already, never_done=True)
     assert len(new) == 1 and new[0].novelty == 1.0
@@ -127,3 +128,78 @@ def test_find_loops_drops_out_and_back_when_a_real_loop_exists(monkeypatch):
 
 
 from types import SimpleNamespace as NS  # noqa: E402
+
+
+# --- GPX fidèle à la carte et séance suivante (#55) -----------------------------
+
+def _line(lat0, lon0, dlat, dlon, n):
+    return [(lat0 + dlat * k, lon0 + dlon * k, None) for k in range(n)]
+
+
+def _triangle_with_spur():
+    """Boucle carrée (~0,9 km de côté) avec, à un coin, une impasse de ~200 m parcourue aller-retour."""
+    side = 0.0004   # ~45 m entre deux points
+    a = _line(48.80, 2.30, side, 0, 20)                      # nord
+    corner = a[-1]
+    spur_out = _line(corner[0], corner[1], 0, -0.0006, 6)[1:]   # impasse vers l'ouest
+    spur_back = spur_out[::-1][1:] + [corner]
+    b = _line(corner[0], corner[1], 0, side * 1.5, 20)[1:]    # est
+    c = _line(b[-1][0], b[-1][1], -side, 0, 20)[1:]          # sud
+    d = _line(c[-1][0], c[-1][1], 0, -side * 1.5, 20)[1:]    # ouest, retour au départ
+    return a + spur_out + spur_back + b + c + d, len(spur_out) + len(spur_back)
+
+
+def test_spur_is_detected_and_cut_so_map_gpx_and_distance_agree():
+    pts, spur_len = _triangle_with_spur()
+    found = routes.spurs(pts)
+    assert len(found) == 1
+    lp = routes.Loop(points=list(pts), km=routes.path_km(pts), quiet=1, calm=0, busy=0)
+    before = lp.km
+    routes.remove_spurs(lp)
+    assert lp.spurs == 0 and len(lp.points) == len(pts) - spur_len
+    assert round(before - lp.km, 2) == round(2 * routes.path_km(pts[19:25]), 2)   # l'aller-retour de l'impasse
+    assert lp.km == routes.path_km(lp.points)                                        # distance = celle du GPX
+    gpx = routes.to_gpx(lp, "x").decode()
+    assert gpx.count("<trkpt") == len(lp.points)
+
+
+def test_a_block_loop_or_the_whole_loop_is_not_a_spur():
+    square = _line(48.80, 2.30, 0.0004, 0, 6) + _line(48.802, 2.30, 0, 0.0006, 6)[1:] + \
+        _line(48.802, 2.303, -0.0004, 0, 6)[1:] + _line(48.80, 2.303, 0, -0.0006, 6)[1:]
+    assert routes.spurs(square) == []   # tour de pâté : on revient par un autre chemin
+    pts, __ = _triangle_with_spur()
+    assert (0, len(pts) - 1) not in routes.spurs(pts)   # départ = arrivée : c'est la boucle, pas une impasse
+
+
+def test_loops_with_a_spur_left_are_never_sent(monkeypatch):
+    def fake_loop_at(start, km, bearing):
+        lp = routes.Loop(points=[(48.8 + 0.001 * i, 2.3 + bearing / 1000, None) for i in range(50)], km=km,
+                         quiet=1.0 if bearing == 0 else 0.4, calm=0.0, busy=0.0, spurs=1 if bearing == 0 else 0)
+        lp.bearing = bearing
+        return lp
+
+    monkeypatch.setattr(routes, "loop_at", fake_loop_at)
+    assert all(lp.bearing != 0 for lp in routes.find_loops((48.8, 2.3), 6, 3))
+
+
+def test_next_session_skips_summaries_bib_pickups_and_races():
+    week = {"summary": "📊 S47 20km", "start": "2026-11-16T08:00:00+01:00", "end": "2026-11-16T08:30:00+01:00"}
+    bib = {"summary": "🎽 Retrait dossard — veille 10km des Lumières", "start": "2026-11-16T09:00:00+01:00",
+           "end": "2026-11-16T09:30:00+01:00"}
+    race = {"summary": "🏁 COURSE 10km des Lumières", "start": "2026-11-16T10:00:00+01:00", "end": "2026-11-16T11:00:00+01:00"}
+    rest = {"summary": "🧘 Récup post-course", "start": "2026-11-16T11:00:00+01:00", "end": "2026-11-16T11:30:00+01:00"}
+    run = {"summary": "🏃 4,5 km faciles + 4 lignes droites", "location": "Travail",
+           "start": "2026-11-17T12:00:00+01:00", "end": "2026-11-17T13:00:00+01:00"}
+    assert commands.next_session([week, bib, race, rest, run]) is run
+    ask = commands.fill_from_session(commands.RouteAsk(), PLACES, [week, bib, race, rest, run])
+    assert (ask.km, ask.place[0], ask.session) == (4.5, "travail", run)
+    assert commands.session_line(run).startswith("Pour ta séance de mardi 12:00 (🏃 4,5 km faciles")
+    given = commands.fill_from_session(commands.RouteAsk(place=PLACES[0], km=8.0), PLACES, [run])
+    assert given.session is None   # tout est donné : la séance n'y est pour rien
+
+
+def test_session_distance_from_description_or_duration_and_pace():
+    assert commands.session_km({"summary": "🏃 Footing", "description": "🏃 Footing facile 6,5 km\n⏱ 45 min"}) == 6.5
+    assert commands.session_km({"summary": "🏃 Footing 45 min", "description": "allure 7:00-7:30/km"}) == 6.2
+    assert commands.session_km({"summary": "🏃 Footing 39 min", "description": "Échauffement 15 min"}) == 6.0
+    assert commands.session_km({"summary": "🏃 Fractionné", "description": "Échauffement 15 min"}) is None

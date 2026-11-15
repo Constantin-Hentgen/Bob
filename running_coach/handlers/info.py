@@ -93,8 +93,9 @@ class InfoMixin:
         if not filled:
             now = datetime.datetime.now(TZ)
             day = now.replace(hour=0, minute=0, second=0, microsecond=0)
-            try:   # la prochaine séance, aujourd'hui ou demain
-                events = (await asyncio.to_thread(cs.list_events, day, day + datetime.timedelta(days=2)))[0]
+            try:   # la prochaine séance de la semaine à venir
+                events = (await asyncio.to_thread(
+                    cs.list_events, day, day + datetime.timedelta(days=commands.SESSION_LOOKAHEAD_DAYS + 1)))[0]
             except Exception:
                 events = []
             ask = commands.fill_from_session(ask, settings.weather_locations, events, now)
@@ -179,6 +180,8 @@ class InfoMixin:
             intro = (_("Une boucle{kind} jamais faite depuis {place} 👀").format(kind=kind, place=name) if never_done
                      else _("{count} boucles{kind} de ~{km} km depuis {place} 👇").format(
                          count=len(loops), kind=kind, km=decimal(f"{km:g}"), place=name))
+        if ask.session:   # distance et lieu tirés de l'agenda : on dit de quelle séance
+            intro = commands.session_line(ask.session) + "\n" + intro
         await self._push(intro)
         photos = [InputMediaPhoto(img, caption=f"{i}. {routes.describe(lp, surface)}" + (" · © OpenStreetMap" if i == 1 else ""))
                   for i, (lp, img) in enumerate(zip(loops, maps), 1)]

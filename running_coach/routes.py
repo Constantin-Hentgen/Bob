@@ -12,7 +12,12 @@
   (relations route=hiking locales à internationales) donne un bonus.
 - « Jamais faite » : comparée aux tracés des runs Dreeve (polylignes encodées).
 - Lieu en texte libre (« bois de vincennes ») : géocodé avec Nominatim (OpenStreetMap), près des lieux connus.
-- Sorties : un fichier GPX et une image de carte (tuiles OpenStreetMap).
+- Culs-de-sac : quand un point de passage tombe dans une impasse (bretelle, cour, voie sans issue), BRouter y va et
+  revient par le même chemin. Sur la carte, cet aller-retour se superpose et disparaît, mais une montre qui suit le GPX
+  y envoie le coureur. On le détecte et on le retire du tracé (sans nouvel appel à BRouter) : la boucle passe par la
+  base de l'impasse sans y entrer. Une boucle qui en garde un n'est jamais envoyée : la carte et le GPX montrent
+  exactement le même parcours, celui que l'on court, et sa distance est recalculée sur ces points.
+- Sorties : un fichier GPX et une image de carte (tuiles OpenStreetMap), tirés des mêmes points.
 """
 import io
 import logging
@@ -33,7 +38,8 @@ BROUTER_URL = "https://brouter.de/brouter"
 PROFILE = "hiking-mountain"
 USER_AGENT = "running-coach-bot/1.0 (self-hosted personal assistant)"
 ROUTE_FACTOR = 1.25          # une boucle suit les rues : ~25 % plus longue que le triangle à vol d'oiseau
-DISTANCE_TOLERANCE = 0.12    # ±12 % de la distance voulue
+DISTANCE_TOLERANCE = 0.05    # ±5 % de la distance voulue (la distance de la séance)
+DISTANCE_TRIES = 3           # appels BRouter max par orientation (service public : rester sobre)
 NEVER_DONE_MIN = 0.8         # « jamais faite » : au moins 80 % du parcours hors de mes anciens tracés
 ROUTES_BUDGET_S = 45         # temps total max pour calculer toutes les orientations
 ROUTES_WORKERS = 4
@@ -47,6 +53,13 @@ UNPAVED_WAYS = {"path", "track", "bridleway"}   # sans tag surface : considéré
 CROSSING_NODES = ("highway=crossing", "highway=traffic_signals")
 SURFACES = ("route", "nature", "mixte")
 MAX_BACKTRACK = 0.08         # au-delà : la boucle contient un aller-retour (demi-tour)
+SPUR_JOIN_KM = 0.03          # cul-de-sac : le tracé repasse à moins de 30 m d'un point déjà parcouru…
+SPUR_MIN_KM = 0.06           # … après un détour d'au moins 60 m…
+SPUR_MAX_KM = 2.0            # … et d'au plus 2 km (et 30 % de la boucle : au-delà, c'est la boucle elle-même)
+SPUR_MAX_SHARE = 0.3
+SPUR_RETRACE_KM = 0.025      # retour à moins de 25 m de l'aller (trottoirs séparés compris) = même chemin
+SPUR_RETRACE_SHARE = 0.6
+SPUR_PASSES = 3              # passes de nettoyage (impasses imbriquées)
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 BUSY = {"primary", "primary_link", "secondary", "secondary_link", "trunk", "trunk_link", "tertiary", "tertiary_link"}
 
@@ -65,6 +78,7 @@ class Loop:
     paved: float = 1.0    # part sur bitume, pavés, béton
     crossings: int = 0    # passages piétons et feux traversés
     marked: float = 0.0   # part sur des sentiers balisés (OSM)
+    spurs: int = 0        # allers-retours dans un cul-de-sac restants (une telle boucle n'est jamais envoyée)
 
     @property
     def safe(self) -> float:
@@ -115,6 +129,49 @@ def backtrack(points: list) -> float:
             again += 1
         seen.setdefault(c, i)
     return again / max(1, len(cells))
+
+
+def _retraced(points: list, i: int, j: int) -> bool:
+    """Le détour i → j revient-il par le chemin de l'aller (cul-de-sac) plutôt que par un autre (tour de pâté) ?"""
+    seg = points[i:j + 1]
+    tip = max(range(len(seg)), key=lambda k: haversine_km(seg[0][:2], seg[k][:2]))
+    out, back = seg[:tip + 1], seg[tip + 1:]
+    if not back:
+        return False
+    near = sum(any(haversine_km(q[:2], o[:2]) <= SPUR_RETRACE_KM for o in out) for q in back)
+    return near / len(back) >= SPUR_RETRACE_SHARE
+
+
+def spurs(points: list) -> list[tuple[int, int]]:
+    """Allers-retours dans un cul-de-sac : (i, j) où le tracé quitte puis retrouve le même endroit par le même chemin.
+    Le départ et l'arrivée de la boucle (même lieu) ne comptent pas : la limite de longueur les exclut."""
+    cum = [0.0]
+    for p, q in zip(points, points[1:]):
+        cum.append(cum[-1] + haversine_km(p[:2], q[:2]))
+    limit = min(SPUR_MAX_KM, SPUR_MAX_SHARE * cum[-1])
+    found, i = [], 0
+    while i < len(points):
+        hit = None
+        for j in range(i + 2, len(points)):
+            span = cum[j] - cum[i]
+            if span > limit:
+                break
+            if span >= SPUR_MIN_KM and haversine_km(points[i][:2], points[j][:2]) <= SPUR_JOIN_KM:
+                hit = j   # le plus loin possible : tout le cul-de-sac
+        if hit is not None and _retraced(points, i, hit):
+            found.append((i, hit))
+            i = hit
+        else:
+            i += 1
+    return found
+
+
+def without_spurs(points: list, found: list[tuple[int, int]]) -> list:
+    keep, last = [], 0
+    for i, j in found:
+        keep += points[last:i + 1]
+        last = j + 1
+    return keep + points[last:]
 
 
 def decode_polyline(encoded: str) -> list[tuple[float, float]]:
@@ -197,17 +254,35 @@ def route(waypoints: list[tuple[float, float]]) -> Loop:
                 paved=paved / total, crossings=crossings, marked=marked / total)
 
 
+def path_km(points: list) -> float:
+    return sum(haversine_km(p[:2], q[:2]) for p, q in zip(points, points[1:]))
+
+
+def remove_spurs(loop: Loop) -> Loop:
+    """Retire les allers-retours dans les impasses (aux points de passage A et B) ; distance recalculée sur le tracé
+    restant, qui est celui de la carte et du GPX. `spurs` dit ce qu'il en reste (0 attendu)."""
+    for __ in range(SPUR_PASSES):
+        found = spurs(loop.points)
+        if not found:
+            break
+        loop.points = without_spurs(loop.points, found)
+        loop.km = path_km(loop.points)
+    loop.spurs = len(spurs(loop.points))
+    return loop
+
+
 def loop_at(start: tuple[float, float], km: float, bearing: float) -> Loop:
-    """Triangle départ → A → B → départ, orienté vers `bearing`, ajusté une fois pour coller à la distance."""
+    """Triangle départ → A → B → départ, orienté vers `bearing`, rayon ajusté pour coller à la distance."""
     radius = km / (3 * ROUTE_FACTOR)
     best = None
-    for __ in range(2):
+    for __ in range(DISTANCE_TRIES):
         a = offset(*start, radius, bearing - 30)
         b = offset(*start, radius, bearing + 30)
-        loop = route([start, a, b, start])
+        loop = remove_spurs(route([start, a, b, start]))
         loop.bearing = bearing
-        best = loop if best is None or abs(loop.km - km) < abs(best.km - km) else best
-        if loop.km and abs(loop.km - km) / km <= DISTANCE_TOLERANCE:
+        if best is None or (loop.spurs, abs(loop.km - km)) < (best.spurs, abs(best.km - km)):
+            best = loop
+        if loop.km and not loop.spurs and abs(loop.km - km) / km <= DISTANCE_TOLERANCE:
             break
         radius *= km / loop.km if loop.km else 1
     return best
@@ -233,7 +308,9 @@ def find_loops(start: tuple[float, float], km: float, count: int = 3, runs: list
         except Exception as e:
             logger.warning(f"Boucle vers {bearing:.0f}° impossible : {e}")
             continue
-        if loop.km <= 0:
+        if loop.km <= 0 or loop.spurs:   # un cul-de-sac invisible sur la carte : jamais envoyé
+            if loop.spurs:
+                logger.info(f"Boucle vers {bearing:.0f}° écartée : {loop.spurs} cul(s)-de-sac")
             continue
         loop.novelty = novelty(loop.points, done) if (done or never_done) else None   # rien couru : tout est nouveau
         loops.append(loop)
@@ -243,11 +320,13 @@ def find_loops(start: tuple[float, float], km: float, count: int = 3, runs: list
                 sorted(loops, key=lambda lp: lp.novelty or 0, reverse=True)[:1]
     loops.sort(key=lambda lp: lp.score(km, surface) + (0.5 * lp.novelty if never_done and lp.novelty else 0), reverse=True)
     picked = []
-    for lp in loops:   # des boucles vraiment différentes : orientations éloignées
-        if all(min(abs(lp.bearing - p.bearing), 360 - abs(lp.bearing - p.bearing)) >= 90 for p in picked):
-            picked.append(lp)
-        if len(picked) == count:
-            break
+    for gap in (90, 60):   # des boucles vraiment différentes : orientations éloignées (un peu moins s'il en manque)
+        for lp in loops:
+            if lp not in picked and all(min(abs(lp.bearing - p.bearing), 360 - abs(lp.bearing - p.bearing)) >= gap
+                                        for p in picked):
+                picked.append(lp)
+            if len(picked) == count:
+                return picked
     return picked
 
 
