@@ -9,6 +9,7 @@ import datetime
 import json
 import logging
 import os
+import re
 import threading
 from pathlib import Path
 
@@ -72,6 +73,23 @@ def priority_of(value) -> int:
 
 
 INTERACTION_GAP_MIN = 90   # silence au-delà duquel une nouvelle session d'échange commence
+
+SINCE_IN_TEXT = re.compile(r"\s*\((?:depuis|since) \d{4}-\d{2}-\d{2}\)", re.I)
+
+
+def _memory_text(text: str, for_user: bool) -> str:
+    return SINCE_IN_TEXT.sub("", text).strip() if for_user else text
+
+
+def _memory_date(date: str, for_user: bool) -> str:
+    if not for_user:
+        return date
+    try:
+        d = datetime.date.fromisoformat(date)
+    except (TypeError, ValueError):
+        return date
+    return f"{d:%d/%m/%Y}" if settings.language == "fr" else f"{d:%Y-%m-%d}"
+
 
 class Store:
     def __init__(self, path: Path, seed: list[tuple[str, str]] | None = None):
@@ -204,8 +222,9 @@ class Store:
             self._save()
         return item
 
-    def render(self) -> str:
-        """Bloc texte stable pour le prompt système : par priorité (règles d'abord), puis catégorie, puis id."""
+    def render(self, for_user: bool = False) -> str:
+        """Bloc texte stable pour le prompt système : par priorité (règles d'abord), puis catégorie, puis id.
+        for_user : pour /memory, dates à la française et sans la date recopiée dans le texte par le modèle."""
         if not self.state["memories"]:
             return _("(rien pour l'instant)")
         order = {c: i for i, c in enumerate(CATEGORIES)}
@@ -215,7 +234,8 @@ class Store:
                            key=lambda m: (order.get(m["category"], 99), m["id"]))
             if items:
                 blocks.append(f"{title} :\n" + "\n".join(
-                    f"- #{m['id']} [{m['category']}] {m['text']} " + _("(depuis {date})").format(date=m['date']) for m in items))
+                    f"- #{m['id']} [{m['category']}] {_memory_text(m['text'], for_user)} "
+                    + _("(depuis {date})").format(date=_memory_date(m['date'], for_user)) for m in items))
         return "\n\n".join(blocks)
 
     # --- historique & état ------------------------------------------------------

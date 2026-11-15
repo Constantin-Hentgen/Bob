@@ -158,8 +158,9 @@ def test_format_form():
             "acRatio": {"value": 1.25, "status": "LOW"}, "restDaysLast7Days": 2}
     runs = [_run(1)]   # dimanche 08/11
     text = commands.format_form(load, runs, datetime.date(2026, 11, 8))
-    assert "TSB) : -10 (NEUTRAL\\_RANGE)" in text
-    assert "- cette semaine : 10.0 km, 1 sortie" in text and "sem. du 12/10 : 0.0 km" in text
+    assert "TSB) : -10 (neutre)" in text
+    assert "- cette semaine : 10,0 km, 1 sortie" in text and "sem. du 12/10 : 0,0 km" in text   # décimales à la française
+    assert "Ratio aigu/chronique : 1,25 (bas)" in text
 
 
 def test_help_lists_every_command():
@@ -690,7 +691,7 @@ def test_eat_choice_sends_the_recipe_updates_stock_and_drops_other_dishes(tmp_pa
     omelette = tools.tool_propose_meal({"title": "Omelette", "recipe": "🛒 Œufs\n1. Battre", "uses": []}, ledger)["meal_id"]
     asyncio.run(b._deliver(agent.AgentReply("Deux idées", meals=[(pasta, "Pâtes au thon"), (omelette, "Omelette")])))
     text, markup = b.sent[-1]
-    assert "Ça te dit quoi" in text and "Cuire" not in text                 # recette envoyée au choix seulement
+    assert text.strip() == "Deux idées" and "Cuire" not in text            # boutons sur le message ; recette au choix
     assert _buttons(markup) == [("🍽️ Pâtes au thon", f"m:{pasta}"), ("🍽️ Omelette", f"m:{omelette}")]
 
     q = _click(b, f"m:{pasta}", markup)
@@ -1084,8 +1085,8 @@ def test_meal_suggestion_before_eating_and_when_it_stays_quiet(tmp_path, monkeyp
     prompt, allow_writes, marker = calls[-1]
     assert "[Suggestion automatique avant le repas]" in prompt and "bureau" in prompt and "question" in prompt
     assert allow_writes is False and marker == bot_module.commands.NO_SUGGESTION
-    (text, no_buttons), (hint, markup) = b.sent[-2:]   # sa phrase, puis les plats avec leurs boutons
-    assert text.startswith("Pour ce midi") and no_buttons is None and "Ça te dit quoi" in hint
+    text, markup = b.sent[-1]   # sa phrase, avec les plats en boutons, sans bulle « Ça te dit quoi ? » en plus
+    assert text.startswith("Pour ce midi") and "Ça te dit quoi" not in text
     assert [l for l, _ in _buttons(markup)] == ["🍽️ Omelette"]
 
     asyncio.run(b.suggest_meal())                       # dishes just offered (as after /eat): no second message

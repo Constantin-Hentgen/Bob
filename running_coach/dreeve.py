@@ -70,7 +70,8 @@ def _pace(activity: dict) -> str:
     return f"{int(p // 60)}'{int(p % 60):02d}/km"
 
 
-def format_activity(a: dict) -> str:
+def format_activity(a: dict, with_id: bool = True) -> str:
+    """Une ligne par run ; with_id=False pour l'athlète (l'id ne sert qu'au modèle, pour les outils Dreeve)."""
     day = (a.get("startDateLocal") or "")[:10]
     try:
         d = datetime.date.fromisoformat(day)
@@ -85,7 +86,7 @@ def format_activity(a: dict) -> str:
     sport = "" if a.get("sportType") == "Run" else f" [{a.get('sportType')}]"
     note = " ".join(str(a.get("description") or "").split())
     note = f" « {note[:100]}{'…' if len(note) > 100 else ''} »" if note else ""
-    return f"- {day} : {a.get('name') or _('Sortie')}{sport}{note} — {', '.join(parts)} (id {a.get('id')})"
+    return f"- {day} : {a.get('name') or _('Sortie')}{sport}{note} — {', '.join(parts)}" + (f" (id {a.get('id')})" if with_id else "")
 
 
 def format_load(d: dict) -> str:

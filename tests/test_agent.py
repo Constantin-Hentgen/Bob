@@ -55,13 +55,13 @@ def test_ask_learns_preference_and_routes_mcp(tmp_path, monkeypatch):
            input={"category": "preference", "text": "Préfère le fractionné le mardi soir"}),
         NS(type="tool_use", id="t2", name="dreeve_get_activity_splits", input={"activityId": "activity-1"}),
     ])
-    final = NS(stop_reason="end_turn", usage=_usage(), content=[NS(type="text", text="C'est noté, on garde ça.")])
+    final = NS(stop_reason="end_turn", usage=_usage(), content=[NS(type="text", text="On garde ça, le mardi soir te va bien.")])
     fake = FakeMessages([tool_round, final])
     monkeypatch.setattr(agent, "_llm", llm.AnthropicLLM(NS(messages=fake)))
 
     out = asyncio.run(agent.ask("Je préfère faire mon fractionné le mardi soir", chat_id="42")).text
 
-    assert out == "C'est noté, on garde ça." and "🧠" not in out   # pas de journal de bord sous le message
+    assert out == "On garde ça, le mardi soir te va bien." and "🧠" not in out   # pas de journal de bord sous le message
     assert any("fractionné le mardi soir" in m["text"] for m in store.memories)
     assert "Aucune modification" not in out
     assert FakeMcpRun.calls == [("dreeve_get_activity_splits", {"activityId": "activity-1"})]
@@ -218,11 +218,11 @@ def test_empty_reply_is_retried_once(tmp_path, monkeypatch):
     monkeypatch.setattr(agent, "_gather_context", fake_context)
     monkeypatch.setattr(dreeve_mcp, "load_tools", no_tools)
     empty = NS(stop_reason="end_turn", usage=_usage(), content=[])
-    final = NS(stop_reason="end_turn", usage=_usage(), content=[NS(type="text", text="C'est noté.")])
+    final = NS(stop_reason="end_turn", usage=_usage(), content=[NS(type="text", text="Top, on garde ça.")])
     fake = FakeMessages([empty, final])
     monkeypatch.setattr(agent, "_llm", llm.AnthropicLLM(NS(messages=fake)))
     reply = asyncio.run(agent.ask("ok", chat_id="1"))
-    assert reply.text == "C'est noté." and len(fake.calls) == 2
+    assert reply.text == "Top, on garde ça." and len(fake.calls) == 2
 
 
 def test_dodge_detection():

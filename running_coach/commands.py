@@ -474,14 +474,33 @@ def format_agenda(events: list[dict], days: int) -> str:
     return "\n".join(lines)
 
 
+LOAD_STATUS = {   # statuts de charge renvoyés par Dreeve
+    "FRESH": _("frais"), "NEUTRAL": _("neutre"), "OPTIMAL": _("optimal"), "PRODUCTIVE": _("productif"),
+    "TIRED": _("fatigué"), "FATIGUED": _("fatigué"), "OVERREACHING": _("surcharge"), "OVERTRAINING": _("surentraînement"),
+    "DETRAINING": _("désentraînement"), "UNDERTRAINING": _("sous-entraînement"), "TRANSITION": _("transition"),
+    "LOW": _("bas"), "LOW_RISK": _("risque faible"), "MODERATE": _("modéré"), "MODERATE_RISK": _("risque modéré"),
+    "HIGH": _("élevé"), "HIGH_RISK": _("risque élevé"), "VERY_HIGH_RISK": _("risque très élevé"),
+}
+
+
+def _status(value) -> str:
+    key = str(value or "").upper().removesuffix("_RANGE").removesuffix("_ZONE")
+    return LOAD_STATUS.get(key) or md_escape(key.lower().replace("_", " "))
+
+
+def _num(value) -> str:
+    """3.8 → « 3,8 » en français ; une valeur absente reste « ? »."""
+    return decimal(f"{value:g}") if isinstance(value, (int, float)) else "?" if value is None else md_escape(str(value))
+
+
 def format_form(load: dict, runs: list[dict], today: datetime.date) -> str:
     tsb, ac = load.get("tsb") or {}, load.get("acRatio") or {}
     lines = [
         _("🔋 *Forme*"),
-        _("- Forme (CTL) : {value}").format(value=load.get('ctl')),
-        _("- Fatigue (ATL) : {value}").format(value=load.get('atl')),
-        _("- Fraîcheur (TSB) : {value} ({status})").format(value=tsb.get('value'), status=md_escape(str(tsb.get('status')))),
-        _("- Ratio aigu/chronique : {value} ({status})").format(value=ac.get('value'), status=md_escape(str(ac.get('status')))),
+        _("- Forme (CTL) : {value}").format(value=_num(load.get('ctl'))),
+        _("- Fatigue (ATL) : {value}").format(value=_num(load.get('atl'))),
+        _("- Fraîcheur (TSB) : {value} ({status})").format(value=_num(tsb.get('value')), status=_status(tsb.get('status'))),
+        _("- Ratio aigu/chronique : {value} ({status})").format(value=_num(ac.get('value')), status=_status(ac.get('status'))),
         _("- Jours de repos sur 7 j : {days}").format(days=load.get('restDaysLast7Days')),
         "",
         _("📊 *Volume par semaine*"),
@@ -490,14 +509,14 @@ def format_form(load: dict, runs: list[dict], today: datetime.date) -> str:
         label = (_("cette semaine") if monday == today - datetime.timedelta(days=today.weekday())
                  else _("sem. du {date}").format(date=f"{monday:%d/%m}"))
         lines.append((_("- {week} : {km} km, {n} sorties") if plural(n) else _("- {week} : {km} km, {n} sortie")).format(
-            week=label, km=f"{km:.1f}", n=n))
+            week=label, km=decimal(f"{km:.1f}"), n=n))
     return "\n".join(lines)
 
 
 def format_last_runs(runs: list[dict]) -> str:
     if not runs:
         return _("Aucun run trouvé dans Dreeve.")
-    return _("🏃 *Derniers runs*") + "\n" + "\n".join(md_escape(format_activity(r)) for r in runs)
+    return _("🏃 *Derniers runs*") + "\n" + "\n".join(md_escape(format_activity(r, with_id=False)) for r in runs)
 
 
 def format_weather(forecast_text: str) -> str:

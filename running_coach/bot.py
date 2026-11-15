@@ -71,7 +71,7 @@ class CoachBot(InfoMixin, KitchenMixin, MealsMixin, RunsMixin, JobsMixin):
         if reply.meals:
             footer, markup = meal_hint(reply.meals), InlineKeyboardMarkup(meal_rows(reply.meals))
         body = "\n".join(part for part in (header, reply.text) if part)   # l'en-tête reste sur le premier message
-        text = "\n\n".join(part for part in (body, footer) if part)
+        text = "\n".join(part for part in (body, footer) if part)   # l'indication des boutons : dans le dernier message
         if text:   # un message par paragraphe : une conversation, pas un pavé
             if reply.gif and reply.gif_moment == "ouverture":   # le GIF ouvre l'échange, avant le premier message
                 await self._send_gif(reply.gif, update)

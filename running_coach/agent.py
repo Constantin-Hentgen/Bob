@@ -101,7 +101,7 @@ DONNÉES DREEVE (lecture seule) :
 
 NUTRITION :
 - Suivi précis : chaque repas dont l'athlète parle est noté avec `log_meal`, à la bonne heure, décomposé en aliments simples avec leur poids estimé (`items`) ; en cas de doute sur un aliment, `find_food` puis son code. Les nutriments et le bilan énergétique (apports vs dépense : métabolisme × activité + runs Dreeve) sont calculés par le système (contexte « Bilan nutritionnel ») : ne les recalcule pas, appuie-toi dessus.
-- Si le profil est incomplet, demande poids, taille, année de naissance et sexe une seule fois, simplement, quand ça vient naturellement, puis `set_profile`.
+- Si le profil est incomplet, complète-le d'abord avec ce que la mémoire sait déjà (poids, taille, âge → année de naissance approchée, sexe) via `set_profile`, sans rien demander ; demande seulement ce qui manque vraiment, une seule fois, quand ça vient naturellement. Un nouveau poids donné par l'athlète met aussi à jour le souvenir correspondant.
 - Philosophie : l'athlète a du mal à manger assez. Tu es son soutien : tu l'encourages à manger suffisamment pour nourrir son entraînement et sa récupération, jamais de culpabilisation, jamais d'incitation à la restriction ; un repas copieux est une bonne nouvelle. Vise le long terme : une hygiène de vie saine et des progrès durables, pas un résultat à court terme ; une journée ratée ne compte pas, la tendance compte.
 - Tu conseilles aussi l'alimentation, au service des objectifs sportifs ET de santé de la mémoire, en tenant compte des séances prévues (jours durs ou longs : plus de glucides et de récupération ; repos : plus léger).
 - Respecte strictement les préférences, régimes et allergies mémorisés. Pas d'avis médical : pour une pathologie, renvoie vers un professionnel.
@@ -112,6 +112,9 @@ RÉPONDRE À LA QUESTION (jamais d'esquive) :
 - Interprète avec la conversation : « ça », « cette semaine », « c'est une bonne idée », « tu proposes quoi » renvoient au sujet des derniers messages. Ne dis jamais « je ne suis pas sûr de ce que tu vises » quand le contexte le dit.
 - Ambiguïté réelle (deux lectures qui mènent à des actions différentes) : pars sur la lecture la plus probable et dis-le en une ligne (« je pars sur la semaine du 30 nov, dis-moi si tu parlais d'une autre »). Pas de menu d'options a) / b) / c).
 - Une consigne claire s'exécute (ou se challenge, voir EXPERTISE) : on ne la renvoie pas sous forme de question.
+- Réponds à la chose demandée, pas à une voisine : « adapte mes allures » → des allures (min/km), pas une cible de FC à la place ; « redonne la recette » → la recette.
+- « Adapte / corrige la recette, les quantités » : renvoie la version corrigée, complète, qui remplace l'ancienne. Ce n'est pas une demande d'idées : pas de nouveaux plats proposés (`propose_meal`), pas de nouveau repas noté. Un plat déjà noté se corrige (`remove_meal` puis `log_meal`), il ne se double pas.
+- Un total (km, sorties, kcal) : fais le calcul à partir des chiffres du contexte et vérifie-le avant de l'écrire. Jamais un chiffre suivi d'un message « petite correction ».
 
 STYLE DE CONVERSATION (une discussion par messages, comme entre deux personnes, jamais un rapport) :
 - Tutoie toujours l'athlète.
@@ -125,6 +128,12 @@ STYLE DE CONVERSATION (une discussion par messages, comme entre deux personnes, 
 - Pas de ton de journal de bord : ne raconte pas ce que tu as noté, retenu, enregistré ou mis à jour (repas, stock, mémoire, objectifs) et n'écris jamais « Noté : … ». Fais-le en silence ; n'en parle que si ça change quelque chose pour lui (« c'était ta dernière boîte de chili »). Les notes « [Note système…] » de l'historique sont pour toi, pas à recopier.
 - Émojis comme un Français de 25 ans qui écrit à un pote : naturels, 0 à 2 par message, souvent en fin de phrase (😂 🙌 🔥 💪 😅 👌 🫡 🥲 😮‍💨 🤤), jamais en puces décoratives ni en titre.
 - Pas de formule rassurante répétitive (« rien n'est modifié tant que… », « je ne touche à rien ») : le système l'indique déjà.
+- Pas de tics : ne réutilise pas les mêmes formules ni le même émoji d'un message à l'autre (« c'est noté », « bon choix », « ça passe », « c'est calé », 👌). 👌 au plus une fois par conversation ; « noté », « c'est noté », « bien noté » jamais : quand il te donne une info, réagis à ce qu'elle change, ou ne dis rien de plus que la suite utile.
+- N'écris pas ta réflexion en cours de route (« ah non », « attends », « en fait… ») : vérifie dans le contexte d'abord, puis écris seulement la conclusion.
+- Ne parle jamais de ta mécanique ni de tes limites (« je ne l'ai plus en mémoire », « je n'ai pas de moyen de… », « j'en ai déjà envoyé un », « je n'ai pas de météo fraîche », « le système… ») : fais avec ce que tu as. Si quelque chose est vraiment impossible, dis en une phrase ce qu'il peut faire, pas pourquoi tu ne peux pas.
+- Ne redemande jamais une info que tu as (mémoire, profil, contexte, conversation).
+- Une donnée manque ? Donne ta meilleure estimation à partir de ce que tu as (runs, FC, allures, mémoire) et dis-le en trois mots (« à vue de nez », « en gros ») plutôt que de refuser. Ex. : FC 154 à 6'41-7'00/km et Z2 sous 144 → une allure de footing estimée plus lente, en min/km.
+- Pas d'offre de service en fin de message (« tu veux que je te propose… ? », « si tu veux, je peux… », « dis-moi si… ») : s'il veut quelque chose, il le demandera. Une question seulement si tu en as besoin pour agir.
 
 GIF ET MÈMES : si l'outil `send_gif` est disponible, tu peux de temps en temps accompagner ton message d'un mème de réaction culte (ceux que tout le monde s'envoie sur Reddit, Twitter, Discord : This is fine, DiCaprio qui lève son verre, Homer qui recule dans les buissons…), choisi dans le catalogue de l'outil, comme un pote, seulement pour ouvrir l'échange (ton premier message de la session) ou le clôturer (il se termine), jamais au milieu : un seul par session au plus, et la plupart du temps aucun. Seulement si l'usage du mème colle pile à la situation, jamais un GIF générique ni au hasard, jamais sur un sujet sérieux.
 
@@ -202,6 +211,33 @@ def too_long(text: str) -> bool:
     return len(text) > MAX_REPLY_CHARS or any(len(p) > MAX_BUBBLE_CHARS for p in re.split(r"\n[ \t]*\n", text))
 
 
+# Tics relevés dans de vraies conversations (#59) : journal de bord, mécanique interne, offre de service en fin de
+# message, réflexion à voix haute. Le prompt les interdit, mais un petit modèle y retombe : une réécriture, sans outil.
+TICS = {
+    "journal de bord": re.compile(
+        r"(?:^|[.!?\n]\s*)(?:ok,?\s*)?not[ée]e?s?\b|\b(?:c['’]est|bien|c['’]est bien) not[ée]e?s?\b|\b(?:retiré|ajouté|enlevé|décompté)e?s? (?:du|au|de ton|à ton) stock"
+        r"|\bj['’]ai (?:bien )?(?:noté|enregistré|mis à jour|corrigé|retiré|ajouté) (?:ton|ta|tes|le|la|les|ça)\b", re.I),
+    "mécanique interne": re.compile(
+        r"\bde mon côté\b|\bje n['’]ai (?:pas|plus) (?:de moyen|accès|le moyen|en mémoire)|\bje ne l['’]ai plus en mémoire"
+        r"|\bdans (?:mes|ma) (?:données|mémoire|outils)\b|\bmes outils\b|\ble système\b", re.I),
+    "offre de service": re.compile(
+        r"(?:\btu veux que je\b|\bsi tu veux,? je\b|\bje peux (?:aussi )?te (?:proposer|faire|préparer)\b"
+        r"|\bdis-moi si tu veux\b)[^.!?\n]*\?*\s*\S*\s*$", re.I),
+    "réflexion à voix haute": re.compile(r"\.\.\.\s*ah non\b|\bah non,|\battends,", re.I),
+}
+TIC_NUDGE = (
+    "[Système] Réécris ton message en gardant le fond, sans : {tics}. Pas de « noté », pas de compte-rendu de ce que tu "
+    "as enregistré, pas de mention de ta mémoire, de tes outils ou de tes limites, pas d'offre de service à la fin. "
+    "Réagis à ce que ça change pour lui, comme un pote. N'appelle aucun outil et ne refais aucune action (celles déjà "
+    "faites restent valides) : réécris seulement ton message."
+)
+
+
+def tics(text: str) -> list[str]:
+    """Les tics de langage présents dans la réponse (seulement les réponses en français : les motifs sont français)."""
+    return [name for name, pattern in TICS.items() if pattern.search(text or "")] if settings.language == "fr" else []
+
+
 EMPTY_REPLY_NUDGE = "[Système] Ta réponse était vide. Réponds maintenant au message de l'athlète ci-dessus."
 
 
@@ -254,10 +290,16 @@ GROCERY_COURSES = re.compile(r"\b(?:liste de courses|faire les courses|les cours
                              re.I)
 
 
+# « 16,6 km planifiés », « 3 sorties prévues », « déjà planifiée » : une description du plan, pas une modification.
+DESCRIPTIVE_PARTICIPLE = re.compile(
+    r"(?:\d(?:[\d,.]*)\s*(?:km|min|h|sorties?|séances?|runs?)?|\bdéjà|\balready)\s+"
+    r"(?:planifié|prévu|ajouté|créé|scheduled|planned)(?:e?s?)\b", re.I)
+
+
 def claims_calendar_change(text: str) -> bool:
     """Phrase affirmant (au passé) une modification d'agenda (vocabulaire d'agenda requis). Appelé sans action d'agenda."""
     for sentence in re.split(r"(?<=[.!?])\s+|\n+", text):
-        sentence = GROCERY_COURSES.sub("", sentence.strip())
+        sentence = DESCRIPTIVE_PARTICIPLE.sub("", GROCERY_COURSES.sub("", sentence.strip()))
         if (sentence and not sentence.endswith("?") and CLAIM_PATTERN.search(sentence)
                 and CALENDAR_WORDS.search(sentence) and not NEGATION.search(sentence)):
             return True
@@ -449,6 +491,13 @@ async def ask(user_prompt: str, chat_id: str = "default", allow_writes: bool = T
                     retry, truncated = await _run_loop(messages, tools, ledger, model)
                     retries -= 1
                     reply = retry or reply
+                if retries > 0 and not truncated and (found := tics(reply)):   # tics de langage : réécrit une fois
+                    logger.warning(f"Tics de langage ({', '.join(found)}) : réécriture")
+                    messages += [{"role": "assistant", "content": reply},
+                                 {"role": "user", "content": TIC_NUDGE.format(tics=", ".join(found))}]
+                    retry, truncated = await _run_loop(messages, tools, ledger, model)
+                    retries -= 1
+                    reply = retry or reply
                 if retries > 0 and not truncated and too_long(reply):   # pavé : réécrit une fois en messages courts
                     logger.warning(f"Réponse trop longue ({len(reply)} caractères) : réécriture")
                     messages += [{"role": "assistant", "content": reply},
@@ -472,7 +521,7 @@ async def ask(user_prompt: str, chat_id: str = "default", allow_writes: bool = T
         if not calendar_actions and not proposals and claims_calendar_change(reply):   # vocabulaire d'agenda exigé
             reply += "\n\n" + _("⚠️ Attention, en vrai rien n'a changé dans ton agenda.")
         elif not reply and not ledger.actions and not error:
-            reply = _("Je n'ai rien produit de concret sur cette demande (aucune réponse du modèle, aucune action).")
+            reply = _("Je sèche sur celle-là 🥲 Tu peux me la redire autrement ?")
 
         reply = strip_echoed_report(reply)
         report = build_report(ledger, truncated, error)
