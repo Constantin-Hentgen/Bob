@@ -248,18 +248,27 @@ def test_checkin_flow_rpe_then_legs_and_pain_follow_up(tmp_path, monkeypatch):
     b, store = _bot(tmp_path, monkeypatch)
     asyncio.run(b._ask_checkin(_run(7)))
     _, markup = b.sent[-1]
-    assert len(_buttons(markup)) == 10
-    q = _click(b, "c:r:7:8")
-    assert "8/10" in q.edits[-1][0] and ("🔴 Douleur", "c:l:7:douleur") in _buttons(q.edits[-1][1])
+    assert len(_buttons(markup)) == 11 and ("0", "c:r:7:0") in _buttons(markup)
+    q = _click(b, "c:r:7:2")
+    assert "2/10" in q.edits[-1][0] and ("🔴 Douleur", "c:l:7:douleur") in _buttons(q.edits[-1][1])
     _click(b, "c:l:7:douleur")
     item = store.state["checkins"]["7"]
-    assert item == {"date": "2026-11-08", "minutes": 50, "name": "Run 7", "rpe": 8, "legs": "douleur"}
+    assert item == {"date": "2026-11-08", "minutes": 50, "name": "Run 7", "feel": 2, "legs": "douleur"}
     assert "T'as mal où" in b.sent[-1][0]
     n = len(b.sent)
     asyncio.run(b._ask_checkin(_run(7), only_if_missing=True))   # déjà noté : on ne redemande pas
     assert len(b.sent) == n
     ctx = coaching.checkins_context(store.recent_checkins(14, datetime.date(2026, 11, 9)))
-    assert "effort 8/10 (très difficile), jambes douleur" in ctx and "effort × minutes) sur la période : 400" in ctx
+    assert "ressenti 2/10 (très dur), jambes douleur" in ctx and "× minutes) sur la période : 400" in ctx
+    assert "0 = mort, 10 = facile comme marcher" in ctx
+
+
+def test_old_effort_checkins_are_read_on_the_new_scale():
+    old = {"date": "2026-11-01", "minutes": 30, "name": "Run", "rpe": 3}   # ancien format : effort 3/10
+    assert coaching.feel(old) == 7 and coaching.feel({"feel": 0}) == 0 and coaching.feel({}) is None
+    ctx = coaching.checkins_context([old, {"date": "2026-11-02", "minutes": 10, "feel": 10}])
+    assert "ressenti 7/10 (confortable)" in ctx and "facile comme marcher)" in ctx
+    assert "sur la période : 90" in ctx   # 3 × 30 + 0 × 10
 
 
 def test_goals_store_render_and_countdown(tmp_path):

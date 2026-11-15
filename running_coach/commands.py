@@ -64,7 +64,7 @@ HELP_TEXT = _("""🏃 *Salut, c'est __BOT_NAME__* 🤖
 /stock — ce que tu as en cuisine : les articles cochés sur ta liste y entrent, les plats que tu marques « mangé » ou « cuisiné » en sortent, et je te demande si les produits frais sont encore là quand ils arrivent à échéance
 /briefing — briefing complet, ajuste le programme dans l'agenda
 /meme — un mème qui résume ta journée d'entraînement 😂
-/routes — 2 ou 3 boucles à la distance et au lieu de ta prochaine séance, les plus calmes et sûres (carte + fichier GPX) ; /routes travail 8 nature pour choisir le lieu, la distance et le revêtement
+/routes — 2 ou 3 boucles à la distance et au lieu de ta prochaine séance, là où tu ne croises personne : ni voitures, ni foule, ni vélos (carte + fichier GPX) ; /routes travail 8 nature pour choisir le lieu, la distance et le revêtement
 /newroute — une boucle jamais courue : /newroute 10 route bois de vincennes (distance, route / nature / mixte, lieu) ; ce qui manque, je te le demande
 /nutrition — ce que tu as mangé aujourd'hui et cette semaine : calories, protéines, glucides, lipides, et si tu manges assez pour ce que tu dépenses (table Ciqual)
 

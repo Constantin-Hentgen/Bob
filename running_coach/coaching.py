@@ -8,8 +8,17 @@ from .dreeve import distance_km, format_activity
 from .memory import LEGS, format_goal, sorted_goals
 from .i18n import _
 
-RPE_LABELS = {1: "très facile", 2: "facile", 3: "facile", 4: "modéré", 5: "modéré", 6: "soutenu",
-              7: "difficile", 8: "très difficile", 9: "très très difficile", 10: "maximal"}
+# Ressenti après séance, sur l'échelle de l'athlète : 0 = mort, 10 = facile comme marcher (l'inverse d'un RPE)
+FEEL_LABELS = {0: "mort, vidé", 1: "à bloc", 2: "très dur", 3: "dur", 4: "difficile", 5: "soutenu", 6: "modéré",
+               7: "confortable", 8: "facile", 9: "très facile", 10: "facile comme marcher"}
+FEEL_SCALE = "0 = mort, 10 = facile comme marcher"
+
+
+def feel(checkin: dict) -> int | None:
+    """Ressenti 0-10 (10 = facile). Les anciens ressentis notés en effort (`rpe`, 10 = à bloc) sont convertis."""
+    if checkin.get("feel") is not None:
+        return checkin["feel"]
+    return 10 - checkin["rpe"] if checkin.get("rpe") else None
 
 
 def _day(d: datetime.date) -> str:
@@ -60,21 +69,22 @@ def format_goals(goals: list[dict], today: datetime.date) -> str:
 # ---------------------------------------------------------------------------
 
 def checkins_context(checkins: list[dict]) -> str:
-    """Ressentis récents + charge perçue (RPE × minutes, « sRPE »)."""
-    rated = [c for c in checkins if c.get("rpe")]
+    """Ressentis récents + charge perçue (effort × minutes, « sRPE », avec effort = 10 − ressenti)."""
+    rated = [c for c in checkins if feel(c) is not None]
     if not checkins:
         return "aucun ressenti enregistré récemment"
     lines = []
     for c in checkins:
         parts = [c.get("name") or "séance"]
-        if c.get("rpe"):
-            parts.append(f"effort {c['rpe']}/10 ({RPE_LABELS.get(c['rpe'], '?')})")
+        if feel(c) is not None:
+            parts.append(f"ressenti {feel(c)}/10 ({FEEL_LABELS.get(feel(c), '?')})")
         if c.get("legs"):
             parts.append(f"jambes {LEGS.get(c['legs'], c['legs'])}")
         lines.append(f"- {c['date']} : {', '.join(parts)}")
     if rated:
-        srpe = sum(c["rpe"] * (c.get("minutes") or 0) for c in rated)
-        lines.append(f"Charge perçue (somme effort × minutes) sur la période : {srpe:.0f}")
+        srpe = sum((10 - feel(c)) * (c.get("minutes") or 0) for c in rated)
+        lines.append(f"Échelle du ressenti : {FEEL_SCALE}.")
+        lines.append(f"Charge perçue (somme (10 − ressenti) × minutes) sur la période : {srpe:.0f}")
     return "\n".join(lines)
 
 
