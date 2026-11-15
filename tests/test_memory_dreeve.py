@@ -2,9 +2,9 @@ import datetime
 
 import pytest
 
-from running_coach import dreeve, tools
-from running_coach.memory import MAX_TEXT, Store, parse_seed
-from running_coach.tools import Ledger, build_report, run_tool
+from bob import dreeve, tools
+from bob.memory import MAX_TEXT, Store, parse_seed
+from bob.tools import Ledger, build_report, run_tool
 
 
 SEED = [("contrainte", "Présentiel bureau lundi, mercredi et vendredi"), ("preference", "Repos de 08:00 à 23:00")]
@@ -172,7 +172,7 @@ def test_memories_are_rendered_by_priority_and_old_ones_default_to_strong(tmp_pa
 
 
 def test_remember_tool_takes_a_priority_and_merges_by_replacing(tmp_path, monkeypatch):
-    from running_coach import tools
+    from bob import tools
     store = Store(tmp_path / "s.json")
     monkeypatch.setattr(tools, "store", store)
     ledger = tools.Ledger()

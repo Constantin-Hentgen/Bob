@@ -4,7 +4,7 @@ import asyncio
 import pytest
 from telegram.error import InvalidToken, TimedOut
 
-from running_coach import app as app_module
+from bob import app as app_module
 
 
 class FakeApp:
@@ -49,7 +49,7 @@ def test_invalid_token_fails_immediately(no_sleep):
 
 
 def test_bot_uses_longer_telegram_timeouts():
-    from running_coach import bot as bot_module
+    from bob import bot as bot_module
     saved = bot_module.settings.telegram_bot_token
     object.__setattr__(bot_module.settings, "telegram_bot_token", "123456:ABC-test-token")
     try:

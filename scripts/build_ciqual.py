@@ -1,4 +1,4 @@
-"""Construit running_coach/data/ciqual_2020.csv depuis la table Ciqual 2020 de l'ANSES (XML officiel).
+"""Construit bob/data/ciqual_2020.csv depuis la table Ciqual 2020 de l'ANSES (XML officiel).
 
 Source : « Table de composition nutritionnelle des aliments Ciqual 2020 », ANSES, Licence Ouverte (Etalab),
 https://www.data.gouv.fr/fr/datasets/table-de-composition-nutritionnelle-des-aliments-ciqual/
@@ -11,7 +11,7 @@ import re
 import sys
 from pathlib import Path
 
-OUT = Path(__file__).resolve().parent.parent / "running_coach" / "data" / "ciqual_2020.csv"
+OUT = Path(__file__).resolve().parent.parent / "bob" / "data" / "ciqual_2020.csv"
 # code constituant Ciqual → colonne (par 100 g)
 NUTRIENTS = {"328": "kcal", "25000": "protein_g", "31000": "carbs_g", "40000": "fat_g",
              "32000": "sugars_g", "34100": "fiber_g", "10004": "salt_g"}

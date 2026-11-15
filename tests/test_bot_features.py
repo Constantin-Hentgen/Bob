@@ -3,11 +3,11 @@ import asyncio
 
 from types import SimpleNamespace as NS
 
-from running_coach import agent
-from running_coach import bot as bot_module
-from running_coach.handlers import info, jobs, kitchen, meals, runs, ui
-from running_coach import dreeve
-from running_coach.memory import Store
+from bob import agent
+from bob import bot as bot_module
+from bob.handlers import info, jobs, kitchen, meals, runs, ui
+from bob import dreeve
+from bob.memory import Store
 
 
 def _patch_bot(monkeypatch, name, value):
@@ -128,8 +128,8 @@ def test_check_new_activity_retries_when_telegram_fails(tmp_path, monkeypatch):
 
 import datetime  # noqa: E402
 
-from running_coach import coaching, commands, weather_alerts  # noqa: E402
-from running_coach.formatting import md_unescape  # noqa: E402
+from bob import coaching, commands, weather_alerts  # noqa: E402
+from bob.formatting import md_unescape  # noqa: E402
 
 
 def test_parse_days():
@@ -313,7 +313,7 @@ ITEMS = [{"name": "Bananes", "quantity": "7", "aisle": "🥦 Fruits et légumes"
 def test_shopping_tool_checklist_and_calendar_event(tmp_path, monkeypatch):
     import dataclasses
 
-    from running_coach import tools
+    from bob import tools
     store = Store(tmp_path / "s.json")
     monkeypatch.setattr(tools, "store", store)
     calls = []
@@ -355,7 +355,7 @@ def test_shopping_tool_checklist_and_calendar_event(tmp_path, monkeypatch):
 
 
 def test_shopping_tool_is_always_offered_and_calendar_tool_refuses_groceries():
-    from running_coach import tools
+    from bob import tools
     assert "save_shopping_list" in {t["name"] for t in tools.ALL_TOOLS} | {t["name"] for t in tools.READ_ONLY_TOOLS}
     create = next(t for t in tools.ALL_TOOLS if t["name"] == "create_calendar_event")
     assert "Jamais pour des courses alimentaires" in create["description"]
@@ -487,7 +487,7 @@ def test_list_edit_updates_same_calendar_slot_and_time_is_required(tmp_path, mon
 
     import pytest
 
-    from running_coach import tools
+    from bob import tools
     store = Store(tmp_path / "s.json")
     monkeypatch.setattr(tools, "store", store)
     monkeypatch.setattr(tools, "settings", dataclasses.replace(tools.settings, caldav_shopping_url="https://dav/shop/"))
@@ -553,7 +553,7 @@ def test_ticked_items_enter_the_stock_and_unticked_leave(tmp_path):
 
 
 def test_update_stock_tool_add_remove_partial_and_report(tmp_path, monkeypatch):
-    from running_coach import tools
+    from bob import tools
     store = Store(tmp_path / "s.json")
     monkeypatch.setattr(tools, "store", store)
     store.update_pantry(add=[{"name": "Riz", "qty": "1 kg"}, {"name": "Œufs", "qty": "6"}, {"name": "Cabillaud"}])
@@ -602,7 +602,7 @@ def test_eat_command_is_read_only_on_haiku_with_time_and_questions(tmp_path, mon
 # --- Modification de la liste en cours ------------------------------------------------
 
 def test_edit_shopping_list_checks_removes_adds_and_syncs_event(tmp_path, monkeypatch):
-    from running_coach import tools
+    from bob import tools
     store = Store(tmp_path / "s.json")
     monkeypatch.setattr(tools, "store", store)
     synced = []
@@ -653,7 +653,7 @@ def test_edit_without_list_fails_cleanly(tmp_path):
 
 def test_propose_meal_tool_records_a_meal_with_its_ingredients(tmp_path, monkeypatch):
     import pytest
-    from running_coach import tools
+    from bob import tools
     store = Store(tmp_path / "s.json")
     monkeypatch.setattr(tools, "store", store)
     ledger = tools.Ledger()
@@ -690,7 +690,7 @@ def test_meal_button_removes_ingredients_once(tmp_path, monkeypatch):
 
 
 def test_eat_choice_sends_the_recipe_updates_stock_and_drops_other_dishes(tmp_path, monkeypatch):
-    from running_coach import tools
+    from bob import tools
     b, store = _bot(tmp_path, monkeypatch)
     monkeypatch.setattr(tools, "store", store)
     store.update_pantry(add=[{"name": "Pâtes", "qty": "500 g"}, {"name": "Thon"}])
@@ -739,7 +739,7 @@ def test_recipes_keep_their_cooked_buttons_when_redisplayed(tmp_path, monkeypatc
 
 
 def test_fresh_items_get_a_keep_by_date_from_list_and_conversation(tmp_path, monkeypatch):
-    from running_coach import memory
+    from bob import memory
     store = Store(tmp_path / "s.json")
     lst = store.set_shopping_list([{"name": "Cabillaud", "keeps": 2}, {"name": "Riz", "keeps": None},
                                    {"name": "Sel", "keeps": "999"}])
@@ -810,7 +810,7 @@ def test_daily_pantry_check_asks_then_expires(tmp_path, monkeypatch):
 
 
 def test_pantry_check_time_setting(monkeypatch):
-    from running_coach import config
+    from bob import config
     assert config._briefing_time("18:30", "PANTRY_CHECK_TIME") == (18, 30)
     assert config._briefing_time("off", "PANTRY_CHECK_TIME") is None
     import pytest
@@ -829,13 +829,13 @@ def test_meal_windows_and_slots():
     day = datetime.date(2026, 11, 11)
     assert not coaching.has_meal_between(meals, day, datetime.time(16, 30), datetime.time(21, 30))   # collation
     assert coaching.has_meal_between(meals, day, datetime.time(10, 30), datetime.time(16, 0))
-    from running_coach import config
+    from bob import config
     assert config._meal_times("21:30, 10:30") == [(10, 30), (21, 30)] and config._meal_times("off") == []
 
 
 def test_log_meal_tool_logs_updates_stock_and_reports(tmp_path, monkeypatch):
     import pytest
-    from running_coach import tools
+    from bob import tools
     store = Store(tmp_path / "s.json")
     monkeypatch.setattr(tools, "store", store)
     store.update_pantry(add=[{"name": "Curry de poulet", "qty": "4 boîtes"}, {"name": "Pommes", "qty": "6"}])
@@ -913,7 +913,7 @@ def test_meal_question_only_without_any_trace_and_once(tmp_path, monkeypatch):
 # --- Boîtes (tups) -------------------------------------------------------------------
 
 def test_boxes_are_counted_from_cooked_dishes_and_shrink_when_eaten(tmp_path, monkeypatch):
-    from running_coach import tools
+    from bob import tools
     b, store = _bot(tmp_path, monkeypatch)
     monkeypatch.setattr(tools, "store", store)
     store.update_pantry(add=[{"name": "Poulet"}, {"name": "Riz", "qty": "1 kg"}])
@@ -931,7 +931,7 @@ def test_boxes_are_counted_from_cooked_dishes_and_shrink_when_eaten(tmp_path, mo
 
 def test_a_dish_cannot_need_more_boxes_than_owned(tmp_path, monkeypatch):
     import pytest
-    from running_coach import tools
+    from bob import tools
     monkeypatch.setattr(tools, "store", Store(tmp_path / "s.json"))
     with pytest.raises(ValueError, match="3 boîtes"):
         tools.tool_propose_meal({"title": "Lasagnes", "makes": "6 boîtes", "uses": [{"name": "Pâtes"}]}, tools.Ledger())
@@ -1118,7 +1118,7 @@ def test_meal_suggestion_before_eating_and_when_it_stays_quiet(tmp_path, monkeyp
 
 
 def test_eat_suggest_times_setting():
-    from running_coach import config
+    from bob import config
     assert config._meal_times("07:00,11:30,18:30", "EAT_SUGGEST_TIMES") == [(7, 0), (11, 30), (18, 30)]
     assert config._meal_times("off", "EAT_SUGGEST_TIMES") == []
 
@@ -1133,13 +1133,13 @@ def test_reply_paragraphs_become_separate_messages(tmp_path, monkeypatch):
 
 
 def test_bubbles_split_on_blank_lines_and_keep_lists_together():
-    from running_coach.formatting import bubbles
+    from bob.formatting import bubbles
     assert [b.strip() for b in bubbles("A\n\n- un\n- deux\n \nB")] == ["A", "- un\n- deux", "B"]
     assert bubbles("") == []
 
 
 def test_gif_only_to_open_or_close_once_per_session(tmp_path, monkeypatch):
-    from running_coach import tools
+    from bob import tools
     b, store = _bot(tmp_path, monkeypatch)
     monkeypatch.setattr(tools, "store", store)
     calls = []
@@ -1212,7 +1212,7 @@ def test_pause_before_each_next_message_grows_with_its_length(monkeypatch):
 
 
 def test_never_more_than_four_messages_in_a_row(tmp_path, monkeypatch):
-    from running_coach.formatting import bubbles
+    from bob.formatting import bubbles
     six = "\n\n".join(["Un.", "Deux.", "Trois trois trois trois.", "Quatre.", "Cinq cinq cinq cinq cinq.", "Six."])
     merged = [m.strip() for m in bubbles(six, 4)]
     assert len(merged) == 4 and "\n\n".join(merged) == six                   # rien de perdu, l'ordre gardé
@@ -1259,7 +1259,7 @@ def test_eat_three_moods_on_buttons_and_reshown_instead_of_rechosen(tmp_path, mo
 
 def test_after_shop_last_call_only_stock(monkeypatch):
     import dataclasses
-    from running_coach import commands
+    from bob import commands
     monkeypatch.setattr(commands, "settings", dataclasses.replace(commands.settings, shop_last_call=(19, 30)))
     tz = bot_module.TZ
     assert "acheter un ou deux trucs" in commands.eat_prompt(datetime.datetime(2026, 11, 13, 18, 0, tzinfo=tz))
@@ -1269,7 +1269,7 @@ def test_after_shop_last_call_only_stock(monkeypatch):
 
 
 def test_search_recipe_returns_open_recipes_without_summary_pages(monkeypatch):
-    from running_coach import recipes, tools
+    from bob import recipes, tools
     calls = []
 
     class Res:
@@ -1284,7 +1284,7 @@ def test_search_recipe_returns_open_recipes_without_summary_pages(monkeypatch):
 
     def fake_get(url, params=None, headers=None, timeout=None):
         calls.append(params)
-        assert "running-coach" in headers["User-Agent"]
+        assert "bob-bot" in headers["User-Agent"]
         if params.get("list") == "search":
             return Res({"query": {"search": [{"title": "Livre de cuisine/Recettes végétariennes"},
                                              {"title": "Apprendre à cuisiner/Les bases"},
@@ -1307,7 +1307,7 @@ def test_search_recipe_returns_open_recipes_without_summary_pages(monkeypatch):
 
 def test_search_recipe_caches_and_backs_off_on_429(monkeypatch):
     import requests as rq
-    from running_coach import recipes
+    from bob import recipes
     monkeypatch.setattr(recipes, "_cache", {})
     monkeypatch.setattr(recipes, "_blocked_until", 0.0)
     calls = []
@@ -1329,7 +1329,7 @@ def test_search_recipe_caches_and_backs_off_on_429(monkeypatch):
 
 
 def test_meal_variety_and_weekly_discovery(tmp_path, monkeypatch):
-    from running_coach import tools
+    from bob import tools
     b, store = _bot(tmp_path, monkeypatch)
     monkeypatch.setattr(tools, "store", store)
     tz = bot_module.TZ
@@ -1366,7 +1366,7 @@ def test_meal_variety_and_weekly_discovery(tmp_path, monkeypatch):
 
 def test_meme_command_sends_a_gif_first_even_mid_session(tmp_path, monkeypatch):
     import dataclasses
-    from running_coach import tools
+    from bob import tools
     b, store = _bot(tmp_path, monkeypatch)
     monkeypatch.setattr(tools, "store", store)
     _patch_bot(monkeypatch, "settings", dataclasses.replace(bot_module.settings, giphy_api_key="k"))
@@ -1449,7 +1449,7 @@ def test_chosen_dish_with_boxes_counts_as_eaten_and_meal_question_waits_an_hour(
 
 
 def test_meal_suggestion_is_about_the_meal_coming_now():
-    from running_coach import commands
+    from bob import commands
     tz = bot_module.TZ
     at = lambda h, m: datetime.datetime(2026, 11, 14, h, m, tzinfo=tz)
     assert [commands.meal_now(at(*t)) for t in ((7, 0), (11, 30), (16, 0), (18, 30))] == [
@@ -1485,7 +1485,7 @@ def test_evening_recap_daily_and_coach_note_only_when_something_is_off(tmp_path,
 
 
 def test_newroute_asks_surface_then_distance_with_buttons(tmp_path, monkeypatch):
-    from running_coach import routes
+    from bob import routes
     b, _ = _bot(tmp_path, monkeypatch)
     places = [("Maison", 48.8, 2.3)]
     monkeypatch.setattr(info, "settings", NS(weather_locations=places, dreeve_enabled=False))
@@ -1544,7 +1544,7 @@ def test_newroute_unknown_place_says_so(tmp_path, monkeypatch):
 # --- Journal alimentaire fiable (#44) -------------------------------------------
 
 def test_same_dish_and_log_issues():
-    from running_coach import nutrition
+    from bob import nutrition
     assert nutrition.same_dish("Curry de poulet", "Curry de poulet + riz (1 boîte)")
     assert not nutrition.same_dish("Pâtes bolo", "Pâtes carbo")
     assert not nutrition.same_dish("rien (déjeuner sauté)", "rien (dîner sauté)")
@@ -1568,7 +1568,7 @@ def test_same_dish_and_log_issues():
 def test_recipe_reminder_does_not_log_the_dish_twice(tmp_path, monkeypatch):
     """Plat choisi via /eat, puis « rappelle-moi la recette » : le coach ne peut pas le noter une 2e fois."""
     import pytest
-    from running_coach import tools
+    from bob import tools
     b, store = _bot(tmp_path, monkeypatch)
     monkeypatch.setattr(tools, "store", store)
     _at(monkeypatch, 12, 30)
@@ -1614,7 +1614,7 @@ def test_meal_question_offers_every_box_and_answers_a_duplicate(tmp_path, monkey
 
 
 def test_day_recap_lists_dishes_and_compares_calories_to_needs():
-    from running_coach.formatting import md_unescape
+    from bob.formatting import md_unescape
     day = datetime.date(2026, 11, 14)
     meals = [{"id": 1, "date": "2026-11-14", "time": "08:00", "text": "Porridge banane", "kcal": 450, "protein_g": 15,
               "carbs_g": 70, "fat_g": 10},

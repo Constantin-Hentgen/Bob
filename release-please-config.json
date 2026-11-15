@@ -3,7 +3,7 @@
   "packages": {
     ".": {
       "release-type": "python",
-      "package-name": "running-coach-agent",
+      "package-name": "bob",
       "include-component-in-tag": false,
       "changelog-path": "CHANGELOG.md",
       "changelog-sections": [

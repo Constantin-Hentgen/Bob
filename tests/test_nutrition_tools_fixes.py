@@ -5,8 +5,8 @@ from types import SimpleNamespace
 import pytest
 import requests
 
-from running_coach import commands, nutrition, tools
-from running_coach.memory import Store
+from bob import commands, nutrition, tools
+from bob.memory import Store
 
 
 class _Resp:

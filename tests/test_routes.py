@@ -1,5 +1,5 @@
 """Boucles de course : choix du lieu et de la distance, polylignes Dreeve, « jamais faite », sélection, GPX."""
-from running_coach import commands, routes
+from bob import commands, routes
 from types import SimpleNamespace as NS
 
 PLACES = [("maison", 48.80, 2.30), ("travail", 48.85, 2.35)]
@@ -72,7 +72,7 @@ def test_parse_route_args_distance_surface_and_free_text_place():
 
 def test_fill_from_session_uses_next_session_place_or_address():
     import datetime
-    from running_coach.config import TZ
+    from bob.config import TZ
     now = datetime.datetime(2026, 11, 10, 12, 0, tzinfo=TZ)
     done = {"summary": "🏃 Footing 5 km", "location": "maison", "start": "2026-11-10T07:00:00+01:00", "end": "2026-11-10T08:00:00+01:00"}
     later = {"summary": "🏃 Sortie longue 14 km", "location": "Parc de Sceaux", "start": "2026-11-11T09:00:00+01:00",

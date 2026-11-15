@@ -5,18 +5,18 @@ from pathlib import Path
 
 import yaml
 
-from running_coach import config
+from bob import config
 
 ROOT = Path(__file__).resolve().parent.parent
 CODE_VARS = {
-    m for f in (ROOT / "running_coach").glob("*.py")
+    m for f in (ROOT / "bob").glob("*.py")
     for m in re.findall(r'(?:_str|_int|_float|getenv)\("([A-Z_]+)"', f.read_text())
 }
 INTERNAL = {"TZ", "COACH_DATA_DIR"}   # fixés par docker-compose.yml lui-même
 
 
 def test_every_code_variable_is_passed_by_docker_compose():
-    env = yaml.safe_load((ROOT / "docker-compose.yml").read_text())["services"]["running-coach"]["environment"]
+    env = yaml.safe_load((ROOT / "docker-compose.yml").read_text())["services"]["bob"]["environment"]
     missing = CODE_VARS - set(env)
     assert not missing, f"à ajouter dans docker-compose.yml : {sorted(missing)}"
 

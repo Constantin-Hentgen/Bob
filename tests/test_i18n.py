@@ -5,10 +5,10 @@ import string
 
 import pytest
 
-from running_coach import i18n
-from running_coach.locales import en
+from bob import i18n
+from bob.locales import en
 
-ROOT = pathlib.Path(__file__).resolve().parent.parent / "running_coach"
+ROOT = pathlib.Path(__file__).resolve().parent.parent / "bob"
 
 
 def _wrapped() -> list[tuple[str, int, str]]:
@@ -61,9 +61,9 @@ def test_no_throwaway_underscore_shadows_the_translation_function():
 
 ENGLISH_RUN = r'''
 import datetime
-from running_coach import agent, commands, recipes, routes, voice, weather, weather_alerts as wa
-from running_coach.config import TZ, settings
-from running_coach.handlers import ui
+from bob import agent, commands, recipes, routes, voice, weather, weather_alerts as wa
+from bob.config import TZ, settings
+from bob.handlers import ui
 day = datetime.date(2026, 11, 14)
 meals = [{"id": 1, "date": "2026-11-14", "time": "08:00", "text": "Porridge", "kcal": 450, "protein_g": 15, "carbs_g": 70, "fat_g": 10}]
 profile = {"weight_kg": 70, "height_cm": 178, "birth_year": 1995, "sex": "m"}

@@ -5,9 +5,9 @@ import re
 
 import pytest
 
-from running_coach import memes, tools
-from running_coach.config import TZ
-from running_coach.memory import Store
+from bob import memes, tools
+from bob.config import TZ
+from bob.memory import Store
 
 
 @pytest.fixture

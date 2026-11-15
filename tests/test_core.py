@@ -2,11 +2,11 @@ import datetime
 
 import pytest
 
-from running_coach import calendar_store as cs
-from running_coach import dreeve, weather
-from running_coach.config import TZ, UTC, parse_locations
-from running_coach.formatting import md_escape, md_unescape, split_message
-from running_coach.tools import Ledger, build_report, run_tool
+from bob import calendar_store as cs
+from bob import dreeve, weather
+from bob.config import TZ, UTC, parse_locations
+from bob.formatting import md_escape, md_unescape, split_message
+from bob.tools import Ledger, build_report, run_tool
 
 ALL_DAY_ICS = """BEGIN:VCALENDAR
 VERSION:2.0
@@ -171,7 +171,7 @@ def test_parse_locations():
 
 
 def test_fetch_daily_handles_single_and_multi_responses(monkeypatch):
-    from running_coach import config
+    from bob import config
 
     class Resp:
         def __init__(self, data):

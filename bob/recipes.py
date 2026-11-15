@@ -24,7 +24,7 @@ SOURCES = {
 }
 SITE, PREFIX, NAMESPACE, NOT_A_RECIPE = SOURCES[settings.language]
 API_URL = f"{SITE}/w/api.php"
-USER_AGENT = "running-coach-bot/1.0 (self-hosted personal assistant)"
+USER_AGENT = "bob-bot/1.0 (self-hosted personal assistant)"
 MAX_RESULTS = 2
 MAX_CHARS = 1500
 CACHE_S = 24 * 3600          # une recherche par plat et par jour suffit

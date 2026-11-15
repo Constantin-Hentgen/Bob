@@ -1,8 +1,8 @@
 import asyncio
 from types import SimpleNamespace as NS
 
-from running_coach import agent, dreeve, dreeve_mcp, llm, tools
-from running_coach.memory import Store
+from bob import agent, dreeve, dreeve_mcp, llm, tools
+from bob.memory import Store
 
 
 def _usage():

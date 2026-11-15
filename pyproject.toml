@@ -1,7 +1,7 @@
 [project]
-name = "running-coach-agent"
+name = "bob"
 version = "3.3.0"
-description = "Autonomous Telegram Running Coach Agent"
+description = "Bob, a self-hosted AI running coach on Telegram"
 license = "MIT"
 readme = "README.md"
 requires-python = ">=3.12"

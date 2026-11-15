@@ -1,8 +1,8 @@
 import asyncio
 from types import SimpleNamespace as NS
 
-from running_coach import agent, dreeve_mcp, llm, tools
-from running_coach.memory import Store
+from bob import agent, dreeve_mcp, llm, tools
+from bob.memory import Store
 
 SEED = [("contrainte", "Présentiel bureau lundi, mercredi et vendredi")]
 
@@ -331,7 +331,7 @@ def test_tool_calls_written_as_text_are_retried_and_never_shown(tmp_path, monkey
 
 
 def test_bot_name_comes_from_settings():
-    from running_coach import commands
-    from running_coach.config import settings
+    from bob import commands
+    from bob.config import settings
     assert f"Tu es {settings.bot_name}," in agent.SYSTEM_PROMPT and "__BOT_NAME__" not in agent.SYSTEM_PROMPT
     assert f"c'est {settings.bot_name}" in commands.HELP_TEXT and "__BOT_NAME__" not in commands.HELP_TEXT
