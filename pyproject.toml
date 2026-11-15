@@ -1,6 +1,6 @@
 [project]
 name = "bob"
-version = "4.0.0"
+version = "5.0.0"
 description = "Bob, a self-hosted AI running coach on Telegram"
 license = "MIT"
 readme = "README.md"

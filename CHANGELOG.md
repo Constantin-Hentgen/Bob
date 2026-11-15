@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.0.0](https://github.com/Constantin-Hentgen/Bob/compare/v4.0.0...v5.0.0) (2026-11-15)
+
+
+### ⚠ BREAKING CHANGES
+
+* BOT_NAME is no longer read; a coach deployed with another name is renamed Bob (persona and Telegram display name) on the next start.
+
+### Changed
+
+* the coach is always Bob; remove BOT_NAME ([#68](https://github.com/Constantin-Hentgen/Bob/issues/68)) ([689890a](https://github.com/Constantin-Hentgen/Bob/commit/689890aa0e3cd2a6c2a6bbe275d7036a8cfe92f0)), closes [#67](https://github.com/Constantin-Hentgen/Bob/issues/67)
+
 ## [4.0.0](https://github.com/Constantin-Hentgen/Running-Coach/compare/v3.3.0...v4.0.0) (2026-11-15)
 
 
