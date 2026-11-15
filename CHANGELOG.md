@@ -2,6 +2,22 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.0](https://github.com/Constantin-Hentgen/Running-Coach/compare/v3.2.0...v3.3.0) (2026-11-15)
+
+
+### Added
+
+* **config:** any CalDAV server and any LLM API (Anthropic or OpenAI-compatible) ([#54](https://github.com/Constantin-Hentgen/Running-Coach/issues/54)) ([da808a2](https://github.com/Constantin-Hentgen/Running-Coach/commit/da808a2dae2a2575a584f63e791c58cf4bce32ee)), closes [#53](https://github.com/Constantin-Hentgen/Running-Coach/issues/53)
+* **gifs:** iconic reaction memes from a curated catalogue instead of keyword GIFs ([#58](https://github.com/Constantin-Hentgen/Running-Coach/issues/58)) ([f1d8dc1](https://github.com/Constantin-Hentgen/Running-Coach/commit/f1d8dc11e1d23edb6c554979d6e3647a43fcb77e)), closes [#57](https://github.com/Constantin-Hentgen/Running-Coach/issues/57)
+* post-run feel on a 0 (dead) to 10 (easy as walking) scale; routes favour deserted paths ([#63](https://github.com/Constantin-Hentgen/Running-Coach/issues/63)) ([d589e14](https://github.com/Constantin-Hentgen/Running-Coach/commit/d589e142ff643d31cd0606e8a8897cb90b1f2d52)), closes [#61](https://github.com/Constantin-Hentgen/Running-Coach/issues/61) [#62](https://github.com/Constantin-Hentgen/Running-Coach/issues/62)
+
+
+### Fixed
+
+* **routes:** GPX matches the map; loops use the next run's distance and place ([#56](https://github.com/Constantin-Hentgen/Running-Coach/issues/56)) ([c17429d](https://github.com/Constantin-Hentgen/Running-Coach/commit/c17429d29f5a8099eb9af015d04eac4271c19643)), closes [#55](https://github.com/Constantin-Hentgen/Running-Coach/issues/55)
+* **telegram:** retry the first connection instead of crashing at startup ([#51](https://github.com/Constantin-Hentgen/Running-Coach/issues/51)) ([563f335](https://github.com/Constantin-Hentgen/Running-Coach/commit/563f3359bcc7092e066ac59beda1370c5b46f0d6)), closes [#50](https://github.com/Constantin-Hentgen/Running-Coach/issues/50)
+* **voice:** fewer robotic, repetitive or self-referential messages from Bob ([#60](https://github.com/Constantin-Hentgen/Running-Coach/issues/60)) ([24a76c7](https://github.com/Constantin-Hentgen/Running-Coach/commit/24a76c7a0f810b1428ef62f3156555152e6771a8)), closes [#59](https://github.com/Constantin-Hentgen/Running-Coach/issues/59)
+
 ## [3.2.0](https://github.com/Constantin-Hentgen/Running-Coach/compare/v3.1.0...v3.2.0) (2026-11-14)
 
 
