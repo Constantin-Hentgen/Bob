@@ -330,8 +330,7 @@ def test_tool_calls_written_as_text_are_retried_and_never_shown(tmp_path, monkey
     assert agent.pseudo_tool_calls("[send_gif: high five]\n[Note système, x]\n[propose_meal]") == ["send_gif", "propose_meal"]
 
 
-def test_bot_name_comes_from_settings():
-    from bob import commands
-    from bob.config import settings
-    assert f"Tu es {settings.bot_name}," in agent.SYSTEM_PROMPT and "__BOT_NAME__" not in agent.SYSTEM_PROMPT
-    assert f"c'est {settings.bot_name}" in commands.HELP_TEXT and "__BOT_NAME__" not in commands.HELP_TEXT
+def test_the_coach_is_always_bob():
+    from bob import bot, commands, config
+    assert "Tu es Bob," in agent.SYSTEM_PROMPT and "c'est Bob" in commands.HELP_TEXT and bot.BOT_NAME == "Bob"
+    assert not hasattr(config.settings, "bot_name")

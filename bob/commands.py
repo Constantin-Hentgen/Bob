@@ -43,7 +43,7 @@ COMMANDS = [
 
 BOT_COMMANDS = [BotCommand(name, desc) for name, __, desc in COMMANDS]
 
-HELP_TEXT = _("""🏃 *Salut, c'est __BOT_NAME__* 🤖
+HELP_TEXT = _("""🏃 *Salut, c'est Bob* 🤖
 Écris-moi simplement : « décale ma sortie de samedi », « je suis crevé, allège demain », « planifie ma semaine »…
 
 *Infos instantanées* (sans IA, gratuites)
@@ -72,7 +72,7 @@ HELP_TEXT = _("""🏃 *Salut, c'est __BOT_NAME__* 🤖
 
 Tu peux aussi m'envoyer des *vocaux* 🎙️. Quand je propose un changement, des boutons te permettent de l'appliquer.
 
-_Automatique : débrief et ressenti après chaque run, briefing chaque matin, bilan le dimanche soir, alerte météo (pluie, chaleur, vent, verglas) sur tes séances, « encore là ? » sur les produits frais du stock, des idées de plats avant les repas, « tu as mangé quoi ? » quand je n'ai aucune trace d'un repas, ton bilan nutrition chaque soir, et un plat nouveau à découvrir chaque semaine._""").replace("__BOT_NAME__", settings.bot_name)
+_Automatique : débrief et ressenti après chaque run, briefing chaque matin, bilan le dimanche soir, alerte météo (pluie, chaleur, vent, verglas) sur tes séances, « encore là ? » sur les produits frais du stock, des idées de plats avant les repas, « tu as mangé quoi ? » quand je n'ai aucune trace d'un repas, ton bilan nutrition chaque soir, et un plat nouveau à découvrir chaque semaine._""")
 
 
 def parse_days(args: list[str], default: int = AGENDA_DEFAULT_DAYS, maximum: int = AGENDA_MAX_DAYS) -> int:

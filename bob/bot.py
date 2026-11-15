@@ -40,7 +40,7 @@ from .i18n import _
 
 logger = logging.getLogger(__name__)
 
-BOT_NAME = settings.bot_name   # BOT_NAME : nom affiché dans Telegram et personnage du coach (voir agent.SYSTEM_PROMPT)
+BOT_NAME = "Bob"   # nom affiché dans Telegram et personnage du coach (voir agent.SYSTEM_PROMPT) : fixe, pour tout le monde
 APPLY_PROMPT = "Applique maintenant cette proposition que tu m'as faite et que je valide : {text}"
 MESSAGE_DEBOUNCE_S = 4.0   # silence attendu avant de répondre, pour regrouper les messages envoyés à la suite
 
