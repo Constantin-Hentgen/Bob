@@ -72,7 +72,6 @@ def without_proposal(markup: InlineKeyboardMarkup | None, pid: str) -> InlineKey
 
 
 MEAL_HINT = _("Touche un plat une fois mangé ou cuisiné 👇")
-CHOOSE_HINT = _("Ça te dit quoi ? 👇")
 
 
 def has_recipe(mid) -> bool:
@@ -111,7 +110,8 @@ def recent_eat_options(now: datetime.datetime) -> list[tuple[int, str]]:
 
 
 def meal_hint(meals: list[tuple[int, str]]) -> str:
-    return CHOOSE_HINT if any(has_recipe(mid) for mid, __ in meals) else MEAL_HINT
+    """Plats à choisir (/eat) : les boutons suffisent. Plats à cocher une fois mangés : une ligne pour le dire."""
+    return "" if any(has_recipe(mid) for mid, __ in meals) else MEAL_HINT
 
 
 MEAL_GUESS_HOURS = 36   # un plat proposé il y a plus longtemps n'est plus un candidat crédible

@@ -45,7 +45,7 @@ def _setup(tmp_path, monkeypatch):
 
 
 def test_claims_not_flagged_for_non_calendar_sentences():
-    for t in ["C'est noté, j'ai mis à jour ton stock 👌", "J'ai ajouté le riz à ta liste de courses.",
+    for t in ["Il te reste de quoi tenir jusqu'à jeudi 👌", "J'ai ajouté le riz à ta liste de courses.",
               "Repas ajouté, bon app !", "J'ai ajouté les courses de la semaine."]:
         assert not agent.claims_calendar_change(t), t
 
@@ -63,7 +63,7 @@ def _stock_then(text):
 
 def test_stock_update_reply_gets_no_warning(tmp_path, monkeypatch):
     _setup(tmp_path, monkeypatch)
-    monkeypatch.setattr(agent, "_llm", llm.AnthropicLLM(NS(messages=_stock_then("C'est noté, j'ai mis à jour ton stock 👌"))))
+    monkeypatch.setattr(agent, "_llm", llm.AnthropicLLM(NS(messages=_stock_then("Il te reste de quoi tenir jusqu'à jeudi 👌"))))
     reply = asyncio.run(agent.ask("stock", chat_id="1"))
     assert "rien n'a changé" not in reply.text
 

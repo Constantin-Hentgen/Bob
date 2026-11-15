@@ -42,7 +42,7 @@ class InfoMixin:
     async def on_memory(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """/memory : ce que le coach a retenu (pour corriger : « oublie le #3 », « en fait je préfère… »)."""
         await self._command(update, lambda: (
-            _("*🧠 Ce que je sais de toi*") + "\n" + md_escape(store.render())
+            _("*🧠 Ce que je sais de toi*") + "\n" + md_escape(store.render(for_user=True))
             + "\n\n" + _("_Pour corriger : « oublie le #3 » ou dis-moi simplement ce qui a changé._")))
 
     async def on_meme(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

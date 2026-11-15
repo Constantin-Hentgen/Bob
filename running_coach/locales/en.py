@@ -1,5 +1,43 @@
 """English messages, keyed by the French source text (see running_coach/i18n.py)."""
 MESSAGES: dict[str, str] = {
+    'Je sèche sur celle-là 🥲 Tu peux me la redire autrement ?':
+        "I'm stuck on that one 🥲 Can you put it another way?",
+    "⚠️ J'ai pas pu aller au bout 🥲 Tu me relances ?":
+        "⚠️ I couldn't finish that 🥲 Mind asking again?",
+    'frais':
+        'fresh',
+    'neutre':
+        'neutral',
+    'optimal':
+        'optimal',
+    'productif':
+        'productive',
+    'fatigué':
+        'tired',
+    'surcharge':
+        'overreaching',
+    'surentraînement':
+        'overtraining',
+    'désentraînement':
+        'detraining',
+    'sous-entraînement':
+        'undertraining',
+    'transition':
+        'transition',
+    'bas':
+        'low',
+    'risque faible':
+        'low risk',
+    'modéré':
+        'moderate',
+    'risque modéré':
+        'moderate risk',
+    'élevé':
+        'high',
+    'risque élevé':
+        'high risk',
+    'risque très élevé':
+        'very high risk',
     '👋 Configuration : ajoute TELEGRAM_CHAT_ID={chat_id} dans ton .env puis redémarre le conteneur.':
         '👋 Setup: add TELEGRAM_CHAT_ID={chat_id} to your .env, then restart the container.',
     "Oups, mon message n'est pas parti 🥲 Réessaie ?":
@@ -38,8 +76,6 @@ MESSAGES: dict[str, str] = {
         'OK, we keep it as is 👍',
     'Touche un plat une fois mangé ou cuisiné 👇':
         "Tap a dish once you've eaten or cooked it 👇",
-    'Ça te dit quoi ? 👇':
-        'What do you fancy? 👇',
     'Ce matin':
         'This morning',
     'Ce midi':
@@ -450,8 +486,6 @@ MESSAGES: dict[str, str] = {
         ' — keeps until {day}',
     "⚠️ Attention, en vrai rien n'a changé dans ton agenda.":
         '⚠️ Heads up: nothing actually changed in your calendar.',
-    "Je n'ai rien produit de concret sur cette demande (aucune réponse du modèle, aucune action).":
-        "I didn't produce anything concrete for this request (no answer from the model, no action).",
     "⚠️ J'ai pas réussi à ajouter « {event} » dans ton agenda. On réessaie ?":
         "⚠️ I couldn't add “{event}” to your calendar. Shall we try again?",
     "⚠️ J'ai pas réussi à modifier « {event} » dans ton agenda. On réessaie ?":

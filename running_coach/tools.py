@@ -881,8 +881,9 @@ def build_report(ledger: Ledger, truncated: bool, error: str | None = None) -> s
             lines.append(_FAILED[a.kind].format(event=md_escape(a.label)))
         elif a.kind == "shopping_event":
             lines.append(_("⚠️ J'ai pas réussi à mettre ta liste de courses dans l'agenda courses."))
-    if truncated:
-        lines.append(_("⚠️ J'ai dû m'arrêter en route, jette un œil à ton agenda pour vérifier."))
+    if truncated:   # l'agenda n'est cité que s'il a été touché
+        lines.append(_("⚠️ J'ai dû m'arrêter en route, jette un œil à ton agenda pour vérifier.")
+                     if any(a.kind in _VERBS for a in ledger.actions) else _("⚠️ J'ai pas pu aller au bout 🥲 Tu me relances ?"))
     if error:
         lines.append(_("⚠️ J'ai eu un bug en route 🥲 Réessaie ?"))
     return "\n".join(lines)
