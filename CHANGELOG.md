@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.0](https://github.com/Constantin-Hentgen/Running-Coach/compare/v3.3.0...v4.0.0) (2026-11-15)
+
+
+### ⚠ BREAKING CHANGES
+
+* the Compose service and container are now called `bob`, and the app module is `bob.app`. Redeploy the stack from the renamed repository; keep the same stack name so the data volume is reused.
+
+### Changed
+
+* rename the project to Bob ([#65](https://github.com/Constantin-Hentgen/Running-Coach/issues/65)) ([4def353](https://github.com/Constantin-Hentgen/Running-Coach/commit/4def3537b40ce3b17f4ca2179675336b1775dc5d)), closes [#64](https://github.com/Constantin-Hentgen/Running-Coach/issues/64)
+
 ## [3.3.0](https://github.com/Constantin-Hentgen/Running-Coach/compare/v3.2.0...v3.3.0) (2026-11-15)
 
 
