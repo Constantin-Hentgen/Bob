@@ -125,7 +125,7 @@ class Store:
         state.setdefault("next_goal_id", 1)
         state.setdefault("proposals", {})     # id → {text, kind, created, status}
         state.setdefault("next_proposal_id", 1)
-        state.setdefault("checkins", {})      # id d'activité → {date, minutes, name, rpe, legs}
+        state.setdefault("checkins", {})      # id d'activité → {date, minutes, name, feel (0 = mort, 10 = facile ; anciens : rpe), legs}
         state.setdefault("shopping", None)    # liste de courses en cours : {id, items, event_uid, created}
         state.setdefault("next_shopping_id", 1)
         # stock en cuisine : {id, name, qty, added, source, keeps (jours ou None), due (date à vérifier), asked (date)}

@@ -2,7 +2,10 @@
 
 - Itinéraires : BRouter (https://brouter.de, open source, données OpenStreetMap), profil randonnée, qui préfère les
   chemins, parcs et rues calmes aux grands axes. Chaque segment renvoie le type de voie OSM : on en déduit la part du
-  parcours sur des voies sûres et calmes.
+  parcours où l'on ne croise personne.
+- Par défaut on cherche la sécurité et le calme : des chemins où il n'y a personne. Pas de voitures (rues, grands
+  axes, traversées), pas de foule (rues piétonnes, zones de rencontre), pas de vélos (pistes cyclables, chemins
+  partagés). Les boucles les plus désertes passent en premier, quel que soit le revêtement voulu.
 - Une boucle part du lieu, passe par deux points à distance choisie (un triangle), et revient au lieu : départ et
   arrivée au même endroit.
 - Revêtement voulu (`surface`) : « route » (bitume, voies calmes, le moins de traversées de rue possible),
@@ -45,7 +48,9 @@ ROUTES_BUDGET_S = 45         # temps total max pour calculer toutes les orientat
 ROUTES_WORKERS = 4
 BROUTER_TIMEOUT_S = 15
 GRID_DEG = 0.0003            # ~30 m : une case de la grille des endroits déjà courus
-QUIET = {"footway", "path", "pedestrian", "track", "cycleway", "living_street", "bridleway", "steps", "corridor"}
+QUIET = {"footway", "path", "track", "bridleway", "steps", "corridor"}   # chemins : ni voitures, ni foule, ni vélos
+CROWDED = {"pedestrian", "living_street", "cycleway"}                  # sans voitures, mais du monde ou des vélos
+BIKES = re.compile(r"\bbicycle=designated\b")                         # chemin partagé avec les vélos
 CALM = {"residential", "service", "unclassified", "road"}
 PAVED = {"asphalt", "paved", "concrete", "concrete:plates", "concrete:lanes", "paving_stones", "sett", "cobblestone",
          "metal", "wood", "chipseal", "unhewn_cobblestone"}
@@ -68,7 +73,7 @@ BUSY = {"primary", "primary_link", "secondary", "secondary_link", "trunk", "trun
 class Loop:
     points: list[tuple[float, float, float | None]]   # (lat, lon, altitude)
     km: float
-    quiet: float          # part sur chemins, parcs, pistes cyclables et voies piétonnes
+    quiet: float          # part sur des chemins déserts : ni voitures, ni foule, ni vélos
     calm: float           # part sur petites rues
     busy: float           # part sur grands axes
     climb: int = 0
@@ -79,25 +84,24 @@ class Loop:
     crossings: int = 0    # passages piétons et feux traversés
     marked: float = 0.0   # part sur des sentiers balisés (OSM)
     spurs: int = 0        # allers-retours dans un cul-de-sac restants (une telle boucle n'est jamais envoyée)
-
-    @property
-    def safe(self) -> float:
-        return self.quiet + self.calm
+    crowded: float = 0.0  # part sur rues piétonnes, zones de rencontre, pistes et chemins cyclables
 
     @property
     def crossings_per_km(self) -> float:
         return self.crossings / self.km if self.km else 0.0
 
     def score(self, km: float, surface: str = "mixte") -> float:
-        """Proche de la distance voulue, sans aller-retour, et selon le revêtement voulu :
-        route → bitume calme avec peu de traversées ; nature → chemins et terre ; mixte → le plus calme."""
-        base = -2 * abs(self.km - km) / km - 3 * backtrack(self.points) + 0.4 * self.marked
+        """Proche de la distance voulue, sans aller-retour, et d'abord déserte (sécurité et calme : ni voitures, ni
+        foule, ni vélos, peu de rues à traverser), puis selon le revêtement : route → bitume ; nature → chemins et
+        terre ; mixte → rien de plus."""
+        base = (-2 * abs(self.km - km) / km - 3 * backtrack(self.points) + 0.4 * self.marked
+                + 1.5 * self.quiet + 0.3 * self.calm - 0.8 * self.crowded - 2 * self.busy
+                - 0.06 * min(self.crossings_per_km, 15))
         if surface == "route":
-            return (base + self.paved + self.quiet + 0.6 * self.calm - 2 * self.busy
-                    - 0.06 * min(self.crossings_per_km, 15))
+            return base + self.paved
         if surface == "nature":
-            return base + 1.5 * (1 - self.paved) + 0.3 * self.quiet - 1.5 * self.busy - 0.02 * min(self.crossings_per_km, 15)
-        return base + self.quiet + 0.6 * self.calm - 1.5 * self.busy
+            return base + 1.5 * (1 - self.paved)
+        return base
 
 
 # ---------------------------------------------------------------------------
@@ -229,7 +233,7 @@ def route(waypoints: list[tuple[float, float]]) -> Loop:
     props = feature["properties"]
     points = [(c[1], c[0], c[2] if len(c) > 2 else None) for c in feature["geometry"]["coordinates"]]
     by_class: dict[str, float] = {}
-    paved = marked = 0.0
+    paved = marked = bikes = 0.0
     crossings = 0
     header, *rows = props.get("messages") or [[]]
     col = lambda name: header.index(name) if name in header else None   # noqa: E731
@@ -245,13 +249,16 @@ def route(waypoints: list[tuple[float, float]]) -> Loop:
             paved += dist
         if re.search(r"route_hiking_\w+=yes", way):
             marked += dist
+        if kind in QUIET and BIKES.search(way):
+            bikes += dist
         if ni is not None and any(t in (row[ni] or "").split() for t in CROSSING_NODES):
             crossings += 1
     total = sum(by_class.values()) or 1
     share = lambda kinds: sum(v for k, v in by_class.items() if k in kinds) / total   # noqa: E731
-    return Loop(points=points, km=float(props.get("track-length") or 0) / 1000, quiet=share(QUIET), calm=share(CALM),
-                busy=share(BUSY), climb=int(float(props.get("filtered ascend") or 0)), tags=by_class,
-                paved=paved / total, crossings=crossings, marked=marked / total)
+    return Loop(points=points, km=float(props.get("track-length") or 0) / 1000, quiet=share(QUIET) - bikes / total,
+                calm=share(CALM), busy=share(BUSY), climb=int(float(props.get("filtered ascend") or 0)), tags=by_class,
+                paved=paved / total, crossings=crossings, marked=marked / total,
+                crowded=share(CROWDED) + bikes / total)
 
 
 def path_km(points: list) -> float:
@@ -379,12 +386,11 @@ def describe(loop: Loop, surface: str = "mixte") -> str:
     pct = lambda x: f"{x * 100:.0f}"   # noqa: E731
     parts = [decimal(f"{loop.km:.1f}") + " km"]
     if surface == "route":
-        parts += [_("{pct} % bitume").format(pct=pct(loop.paved)), _("{pct} % voies calmes").format(pct=pct(loop.safe)),
-                  (_("{n} traversées") if plural(loop.crossings) else _("{n} traversée")).format(n=loop.crossings)]
+        parts.append(_("{pct} % bitume").format(pct=pct(loop.paved)))
     elif surface == "nature":
         parts.append(_("{pct} % nature").format(pct=pct(1 - loop.paved)))
-    else:
-        parts.append(_("{pct} % chemins et rues calmes").format(pct=pct(loop.safe)))
+    parts += [_("{pct} % sans voitures ni foule").format(pct=pct(loop.quiet)),
+              (_("{n} traversées") if plural(loop.crossings) else _("{n} traversée")).format(n=loop.crossings)]
     if loop.marked >= 0.15:
         parts.append(_("{pct} % sur sentiers balisés").format(pct=pct(loop.marked)))
     if loop.climb >= 20:

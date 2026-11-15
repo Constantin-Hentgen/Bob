@@ -7,7 +7,7 @@ from telegram import Update
 from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 
-from .. import agent, dreeve
+from .. import agent, coaching, dreeve
 from ..config import TZ, settings
 from ..memory import LEGS, store
 from .ui import PAIN_FOLLOW_UP, legs_markup, rpe_markup
@@ -51,10 +51,10 @@ class RunsMixin:
         query = update.callback_query
         await query.answer()
         if step == "r":
-            rpe = int(value)
-            store.set_checkin(activity_id, rpe=rpe)
+            score = int(value)
+            store.set_checkin(activity_id, feel=score)
             await query.edit_message_text(
-                _("{rpe}/10, ok 👌 Et les jambes ?").format(rpe=rpe),
+                _("{rpe}/10, ok 👌 Et les jambes ?").format(rpe=score),
                 parse_mode=ParseMode.MARKDOWN, reply_markup=legs_markup(activity_id))
         elif step == "l" and value in LEGS:
             store.set_checkin(activity_id, legs=value)
@@ -64,16 +64,16 @@ class RunsMixin:
                 await self._push(PAIN_FOLLOW_UP)
 
     async def _ask_checkin(self, run: dict, only_if_missing: bool = False) -> None:
-        """Demande l'effort perçu (1-10) puis l'état des jambes, par boutons."""
+        """Demande le ressenti (0 = mort, 10 = facile comme marcher) puis l'état des jambes, par boutons."""
         activity_id = run.get("id")
         if activity_id is None or len(f"c:r:{activity_id}:10") > 64:   # limite Telegram des données de bouton
             return
         existing = store.state["checkins"].get(str(activity_id), {})
-        if only_if_missing and existing.get("rpe"):
+        if only_if_missing and coaching.feel(existing) is not None:
             return
         store.set_checkin(activity_id, date=(run.get("startDateLocal") or "")[:10] or None,
                           minutes=round((run.get("movingTimeInSeconds") or 0) / 60), name=run.get("name"))
-        await self._push(_("Alors, t'as senti comment ? Effort de 1 (tranquille) à 10 (à bloc) :"), rpe_markup(activity_id))
+        await self._push(_("Alors, t'as senti comment ? De 0 (mort) à 10 (facile comme marcher) :"), rpe_markup(activity_id))
 
     async def check_new_activity(self, source: str = "polling") -> bool:
         """Débriefe chaque run apparu dans Dreeve depuis le dernier vu, puis demande le ressenti.

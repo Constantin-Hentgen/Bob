@@ -1,5 +1,6 @@
 """Boucles de course : choix du lieu et de la distance, polylignes Dreeve, « jamais faite », sélection, GPX."""
 from running_coach import commands, routes
+from types import SimpleNamespace as NS
 
 PLACES = [("maison", 48.80, 2.30), ("travail", 48.85, 2.35)]
 
@@ -49,7 +50,7 @@ def test_gpx_and_description():
     gpx = routes.to_gpx(lp, "Boucle 1 · maison & co").decode()
     assert gpx.startswith('<?xml version="1.0"') and 'lat="48.800000" lon="2.300000"><ele>35</ele>' in gpx
     assert "maison &amp; co" in gpx and "OpenStreetMap" in gpx
-    assert routes.describe(lp) == "6,2 km · 100 % chemins et rues calmes · 92 % jamais couru"
+    assert routes.describe(lp) == "6,2 km · 80 % sans voitures ni foule · 0 traversée · 92 % jamais couru"
 
 
 def test_backtrack_detects_out_and_back():
@@ -110,8 +111,31 @@ def test_score_follows_wanted_surface_and_describe():
     assert trail.score(6, "nature") > road.score(6, "nature")
     busy_crossings = routes.Loop(points=pts, km=6, quiet=0.3, calm=0.6, busy=0.0, paved=1.0, crossings=60)
     assert road.score(6, "route") > busy_crossings.score(6, "route")              # moins de traversées
-    assert routes.describe(road, "route") == "6,0 km · 100 % bitume · 90 % voies calmes · 6 traversées"
-    assert routes.describe(trail, "nature") == "6,0 km · 90 % nature · 50 % sur sentiers balisés"
+    assert routes.describe(road, "route") == "6,0 km · 100 % bitume · 30 % sans voitures ni foule · 6 traversées"
+    assert routes.describe(trail, "nature") == "6,0 km · 90 % nature · 80 % sans voitures ni foule · 1 traversée · 50 % sur sentiers balisés"
+
+
+def test_default_prefers_deserted_paths_over_cars_crowds_and_bikes():
+    pts = [(48.8 + 0.001 * i, 2.3, None) for i in range(40)] + [(48.8 + 0.001 * i, 2.31, None) for i in range(40)]
+    alone = routes.Loop(points=pts, km=6, quiet=0.8, calm=0.2, busy=0.0, crossings=2)
+    streets = routes.Loop(points=pts, km=6, quiet=0.1, calm=0.9, busy=0.0, crossings=20)
+    crowd = routes.Loop(points=pts, km=6, quiet=0.2, calm=0.2, busy=0.0, crowded=0.6, crossings=2)
+    avenue = routes.Loop(points=pts, km=6, quiet=0.5, calm=0.2, busy=0.3, crossings=2)
+    assert alone.score(6) > max(streets.score(6), crowd.score(6), avenue.score(6))
+    assert alone.score(6.6) > streets.score(6)   # mieux vaut 10 % trop long que dans les rues
+
+
+def test_route_counts_shared_bike_paths_and_pedestrian_streets_as_crowded(monkeypatch):
+    header = ["Longitude", "Latitude", "Elevation", "Distance", "CostPerKm", "ElevCost", "TurnCost", "NodeCost",
+              "InitialCost", "WayTags", "NodeTags", "Time", "Energy"]
+    row = lambda d, tags: ["0", "0", "0", str(d), "0", "0", "0", "0", "0", tags, "", "0", "0"]   # noqa: E731
+    payload = {"features": [{"properties": {"track-length": "4000", "messages": [
+        header, row(1000, "highway=path"), row(1000, "highway=path bicycle=designated"),
+        row(1000, "highway=pedestrian"), row(1000, "highway=cycleway")]},
+        "geometry": {"coordinates": [[2.3, 48.8], [2.31, 48.81]]}}]}
+    monkeypatch.setattr(routes.requests, "get", lambda url, **kw: NS(raise_for_status=lambda: None, json=lambda: payload))
+    lp = routes.route([(48.8, 2.3), (48.81, 2.31)])
+    assert (lp.quiet, lp.crowded) == (0.25, 0.75)
 
 
 def test_find_loops_drops_out_and_back_when_a_real_loop_exists(monkeypatch):

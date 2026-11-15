@@ -196,7 +196,7 @@ def shopping_markup(lst: dict) -> InlineKeyboardMarkup:
 
 def rpe_markup(activity_id) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([[InlineKeyboardButton(str(n), callback_data=f"c:r:{activity_id}:{n}") for n in row]
-                                 for row in ((1, 2, 3, 4, 5), (6, 7, 8, 9, 10))])
+                                 for row in ((0, 1, 2, 3, 4, 5), (6, 7, 8, 9, 10))])
 
 
 LEG_LABELS = {"fraiches": _("Fraîches"), "normales": _("Normales"), "lourdes": _("Lourdes"), "douleur": _("Douleur")}
