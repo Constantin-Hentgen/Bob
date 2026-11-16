@@ -7,7 +7,6 @@ par Remy. Toute fonction peut lever `bob.services.ServiceError` (Remy injoignabl
 que la nutrition est indisponible, sans jamais faire comme si c'était enregistré.
 """
 import datetime
-import threading
 from dataclasses import dataclass
 
 from remy.energy import CARBS_G_PER_KG_TRAINING, PROTEIN_G_PER_KG
@@ -104,8 +103,8 @@ def as_meal(m: MealOut) -> dict:
 
 def meals_since(day: datetime.date) -> list[dict]:
     """Repas notés depuis `day` (inclus), du plus ancien au plus récent."""
-    with remy.calls():   # pas de repas futurs chez Remy : « jusqu'à dans un an » = jusqu'à maintenant
-        meals = remy.client().meals(start=day, end=day + datetime.timedelta(days=365))
+    with remy.calls():
+        meals = remy.client().meals(start=day, end="today")
     return sorted((as_meal(m) for m in meals), key=lambda m: (m["date"], m["time"]))
 
 
@@ -187,10 +186,6 @@ def set_meal_check(key: str, status: str) -> None:
 # Runs Dreeve → séances Remy (pour les besoins du jour)
 # ---------------------------------------------------------------------------
 
-_pushed: dict[str, tuple] = {}   # id Dreeve → valeurs déjà envoyées : un run n'est renvoyé que s'il change
-_pushed_lock = threading.Lock()
-
-
 def sync_workouts(runs: list[dict], today: datetime.date) -> None:
     """Envoie à Remy les runs des WORKOUT_DAYS derniers jours (calories de la montre, distance, durée). Remy les
     reconnaît par leur id : renvoyer un run le met à jour, sans doublon."""
@@ -199,17 +194,11 @@ def sync_workouts(runs: list[dict], today: datetime.date) -> None:
         day = (run.get("startDateLocal") or "")[:10]
         if not day or day < since or run.get("id") is None:
             continue
-        values = (day, run.get("calories"), run.get("distanceInMeter"), run.get("movingTimeInSeconds"))
-        with _pushed_lock:
-            if _pushed.get(str(run["id"])) == values:
-                continue
         with remy.calls():
             remy.client().add_workout(
                 date=day, kind="run", kcal=float(run["calories"]) if run.get("calories") else None,
                 km=round((run.get("distanceInMeter") or 0) / 1000, 2) or None,
                 minutes=round((run.get("movingTimeInSeconds") or 0) / 60, 1) or None, external_id=f"dreeve:{run['id']}")
-        with _pushed_lock:
-            _pushed[str(run["id"])] = values
 
 
 # ---------------------------------------------------------------------------

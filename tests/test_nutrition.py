@@ -74,7 +74,7 @@ def test_profile_and_energy_balance(tmp_path, monkeypatch):
     text = commands.format_nutrition(snap, nutrition.meals_since(today), today)
     assert text.startswith("🍽️ *Aujourd'hui*") and "encore ~" in text and "Ciqual" in text
     assert "- 08:00 repas 08:00" in text
-    nutrition.sync_workouts([run], today)            # déjà envoyé, inchangé : pas de nouvel appel
+    nutrition.sync_workouts([run], today)            # renvoyé : Remy met à jour la séance, sans doublon
     assert len(nutrition.remy.client().workouts(start=today)) == 1
 
 

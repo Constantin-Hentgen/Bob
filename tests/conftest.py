@@ -11,7 +11,6 @@ from remy.client import RemyClient
 from remy.service.app import create_app
 from remy.service.settings import Settings
 
-from bob import nutrition
 from bob.services import STATUS
 from bob.services import remy as remy_service
 
@@ -56,7 +55,6 @@ def remy(request, tmp_path, monkeypatch):
     local = LocalRemy(tmp_path)
     monkeypatch.setattr(remy_service, "client", local)
     monkeypatch.setattr(remy_service, "enabled", lambda: True)
-    nutrition._pushed.clear()
     STATUS.clear()
     yield local
     local.close()
