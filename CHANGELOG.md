@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.1.0](https://github.com/Constantin-Hentgen/Bob/compare/v5.0.0...v5.1.0) (2026-11-16)
+
+
+### Added
+
+* run Remy and Emile next to Bob, with a service layer and health checks ([#75](https://github.com/Constantin-Hentgen/Bob/issues/75)) ([c69925b](https://github.com/Constantin-Hentgen/Bob/commit/c69925b5b6e1eb9c2a7e7f6ed98d53326bb6e78f)), closes [#71](https://github.com/Constantin-Hentgen/Bob/issues/71)
+
 ## [5.0.0](https://github.com/Constantin-Hentgen/Bob/compare/v4.0.0...v5.0.0) (2026-11-15)
 
 
