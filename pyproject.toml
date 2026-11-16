@@ -28,6 +28,7 @@ dependencies = [
 dev = [
     "pytest>=8",
     "pyyaml>=6.0.3",
+    "remy[server]>=0.6.0",
 ]
 
 [tool.uv]
@@ -40,3 +41,4 @@ emile = { url = "https://github.com/Constantin-Hentgen/Emile/archive/refs/tags/v
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+markers = ["live: talks to the real Remy and Emile started by the CI job (BOB_LIVE_SERVICES=1)"]

@@ -8,7 +8,7 @@ from types import SimpleNamespace
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InputMediaDocument, InputMediaPhoto, Update
 from telegram.ext import ContextTypes
 
-from .. import agent, commands, dreeve, routes, weather
+from .. import agent, commands, dreeve, nutrition, routes, weather
 from .. import calendar_store as cs
 from ..config import TZ, settings
 from ..formatting import md_escape
@@ -204,7 +204,7 @@ class InfoMixin:
         def build() -> str:
             today = datetime.datetime.now(TZ).date()
             runs = dreeve.get_all_runs() if settings.dreeve_enabled else []
-            return commands.format_nutrition(store.meals_since(today - datetime.timedelta(days=8)), runs, store.profile, today)
+            return commands.format_nutrition(nutrition.snapshot(runs, today), nutrition.meals_since(today), today)
         await self._command(update, build)
 
     async def on_agenda(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

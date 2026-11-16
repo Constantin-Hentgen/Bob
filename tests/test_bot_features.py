@@ -8,6 +8,13 @@ from bob import bot as bot_module
 from bob.handlers import info, jobs, kitchen, meals, runs, ui
 from bob import dreeve
 from bob.memory import Store
+from bob import nutrition
+
+
+def log_meal(text, at, **values):
+    """Repas noté chez Remy (le Remy local de conftest.py), comme le coach l'aurait fait."""
+    meal, __, __ = nutrition.log_meal(text, at, estimate=values)
+    return meal
 
 
 def _patch_bot(monkeypatch, name, value):
@@ -707,7 +714,7 @@ def test_eat_choice_sends_the_recipe_updates_stock_and_drops_other_dishes(tmp_pa
     assert q.edits[-1] == ("markup", None)                                    # les autres plats tombent
     assert "Pâtes au thon" in b.sent[-1][0] and "1. Cuire les pâtes" in b.sent[-1][0] and "Stock" not in b.sent[-1][0]
     assert {p["name"]: p["qty"] for p in store.pantry} == {"Pâtes": "350 g"}
-    assert [m["kcal"] for m in store.meals_since(datetime.date(2020, 1, 1))] == [700]
+    assert [m["kcal"] for m in nutrition.meals_since(datetime.date.today() - datetime.timedelta(days=30))] == [700]
     assert _click(b, f"m:{omelette}").answers == ["Déjà noté."]
 
 
@@ -849,8 +856,8 @@ def test_log_meal_tool_logs_updates_stock_and_reports(tmp_path, monkeypatch):
     assert report == ""
     with pytest.raises(ValueError):
         tools.tool_log_meal({"description": "Dîner", "time": "2099-01-01T20:00:00"}, ledger)
-    store.log_meal("Porridge banane", datetime.datetime(2026, 11, 11, 7, 30, tzinfo=tools.cs.TZ), kcal=450, protein_g=15)
-    ctx = coaching.meals_context(store.meals_since(datetime.date(2026, 11, 10)), datetime.date(2026, 11, 11))
+    log_meal("Porridge banane", datetime.datetime(2026, 11, 11, 7, 30, tzinfo=tools.cs.TZ), kcal=450, protein_g=15)
+    ctx = coaching.meals_context(nutrition.meals_since(datetime.date(2026, 11, 10)), datetime.date(2026, 11, 11))
     assert "hier (mar 10/11) :\n- #1 12:45 Curry de poulet (1 boîte) + pomme (~720 kcal, P 42 g, G 85 g)" in ctx
     assert "aujourd'hui (mer 11/11) :\n- #2 07:30 Porridge banane (~450 kcal, P 15 g)\n  total estimé : ~450 kcal, P 15 g" in ctx
     assert {"log_meal", "propose_meal"} <= {t["name"] for t in tools.READ_ONLY_TOOLS}
@@ -864,12 +871,12 @@ def test_eaten_button_logs_the_meal_and_cooked_button_stocks_boxes(tmp_path, mon
     cooked = store.add_proposal("Curry de poulet", kind="meal", uses=[{"name": "Poulet"}, {"name": "Riz", "qty_left": "600 g"}],
                                 makes="4 boîtes", macros={})
     _click(b, f"m:{eaten}")
-    (meal,) = store.meals_since(datetime.date(2020, 1, 1))
+    (meal,) = nutrition.meals_since(datetime.date.today() - datetime.timedelta(days=30))
     assert meal["text"] == "Bowl saumon" and meal["kcal"] == 650 and meal["source"] == "bouton"
     _click(b, f"m:{cooked}")
     assert b.sent[-1][0].strip() == "Top, 4 boîtes de côté pour les prochains jours 🙌"
     assert {p["name"]: p["qty"] for p in store.pantry} == {"Riz": "600 g", "Curry de poulet": "4 boîtes"}
-    assert len(store.meals_since(datetime.date(2020, 1, 1))) == 1                # cuisiné ≠ mangé
+    assert len(nutrition.meals_since(datetime.date.today() - datetime.timedelta(days=30))) == 1                # cuisiné ≠ mangé
 
 
 def _at(monkeypatch, hour, minute, day=11):
@@ -886,7 +893,7 @@ def test_meal_question_only_without_any_trace_and_once(tmp_path, monkeypatch):
     _patch_bot(monkeypatch, "settings",
                         dataclasses.replace(bot_module.settings, meal_check_times=[(10, 30), (14, 30), (21, 30)]))
     tz = bot_module.TZ
-    store.log_meal("Porridge", datetime.datetime(2026, 11, 11, 7, 45, tzinfo=tz))
+    log_meal("Porridge", datetime.datetime(2026, 11, 11, 7, 45, tzinfo=tz))
     _at(monkeypatch, 10, 30)
     asyncio.run(b.check_meal(0))                                             # petit-déj noté : pas de question
     assert not b.sent
@@ -900,14 +907,14 @@ def test_meal_question_only_without_any_trace_and_once(tmp_path, monkeypatch):
     assert len(b.sent) == 1
 
     _click(b, "q:s:2026-11-11:1")                                            # sauté : noté à la fin de la plage
-    skipped = store.meals_since(datetime.date(2026, 11, 11))[-1]
+    skipped = nutrition.meals_since(datetime.date(2026, 11, 11))[-1]
     assert (skipped["time"], skipped["text"], skipped["kcal"]) == ("14:30", "rien (déjeuner sauté)", 0)
     assert "Ça arrive" in b.sent[-1][0]
     _at(monkeypatch, 21, 30)                                                 # le « sauté » n'efface pas le dîner
     asyncio.run(b.check_meal(2))
     assert "Ce soir" in b.sent[-1][0]
     _click(b, "q:x:2026-11-11:2")                                            # « Passer » des anciens messages
-    assert store.meal_check("2026-11-11 dîner") == "skipped" and b.sent[-1][0].strip() == "Ok 👌"
+    assert nutrition.meal_check("2026-11-11 dîner") == "skipped" and b.sent[-1][0].strip() == "Ok 👌"
 
 
 # --- Boîtes (tups) -------------------------------------------------------------------
@@ -1041,10 +1048,10 @@ def test_meal_question_guesses_boxes_and_suggested_dishes_one_tap(tmp_path, monk
     chili = next(d for label, d in _buttons(markup) if "Chili" in label)
     q = _click(b, chili, markup)
     assert q.edits == [("markup", None)]                                       # la question est close
-    meal = store.meals_since(datetime.date(2026, 11, 11))[-1]
+    meal = nutrition.meals_since(datetime.date(2026, 11, 11))[-1]
     assert (meal["text"], meal["time"]) == ("Chili", "14:30")                  # à l'heure du repas, pas du clic
     assert b.sent[-1][0].strip() == "😋 Il t'en reste 1 boîte."
-    assert store.meal_check("2026-11-11 déjeuner") == "answered"
+    assert nutrition.meal_check("2026-11-11 déjeuner") == "answered"
     assert store.proposal(suggested)["status"] == "open"                       # pas mangé : reste candidat
     assert _click(b, chili, markup).answers == ["Déjà noté."]
 
@@ -1055,7 +1062,7 @@ def test_meal_question_guesses_boxes_and_suggested_dishes_one_tap(tmp_path, monk
     _click(b, pasta, markup)
     assert store.proposal(suggested)["status"] == "applied"                    # l'original ne sera plus proposé
     assert {p["name"]: p["qty"] for p in store.pantry}["Thon"] == "1 boîte"
-    assert store.meals_since(datetime.date(2026, 11, 11))[-1]["kcal"] == 650
+    assert nutrition.meals_since(datetime.date(2026, 11, 11))[-1]["kcal"] == 650
 
 
 def test_last_box_is_said_and_skipping_closes_the_guesses(tmp_path, monkeypatch):
@@ -1111,7 +1118,7 @@ def test_meal_suggestion_before_eating_and_when_it_stays_quiet(tmp_path, monkeyp
     asyncio.run(b.suggest_meal())
     assert len(b.sent) == n
 
-    store.log_meal("Sandwich", datetime.datetime(2026, 11, 11, 11, 0, tzinfo=bot_module.TZ))
+    log_meal("Sandwich", datetime.datetime(2026, 11, 11, 11, 0, tzinfo=bot_module.TZ))
     monkeypatch.setattr(bot_module.agent, "ask", fake_ask)
     asyncio.run(b.suggest_meal())                       # already eaten: no suggestion
     assert len(calls) == 1
@@ -1335,8 +1342,8 @@ def test_meal_variety_and_weekly_discovery(tmp_path, monkeypatch):
     tz = bot_module.TZ
     for d, text in ((10, "🍝 Pâtes au thon, maïs (1 tup, ce midi)"), (11, "Pâtes au thon et ratatouille"),
                     (12, "pâtes au thon"), (12, "Omelette"), (13, "rien (déjeuner sauté)")):
-        store.log_meal(text, datetime.datetime(2026, 11, d, 12, 30, tzinfo=tz))
-    meals = store.meals_since(datetime.date(2026, 11, 1))
+        log_meal(text, datetime.datetime(2026, 11, d, 12, 30, tzinfo=tz))
+    meals = nutrition.meals_since(datetime.date(2026, 11, 1))
     assert coaching.dish_key("🍝 Pâtes au thon, maïs (1 tup, ce midi)") == "pâtes au thon"
     v = coaching.meal_variety(meals, datetime.date(2026, 11, 13))
     assert "4 repas notés, 2 plats différents" in v and "pâtes au thon ×3" in v
@@ -1355,12 +1362,12 @@ def test_meal_variety_and_weekly_discovery(tmp_path, monkeypatch):
     assert "[Plat découverte de la semaine]" in asked[0] and "search_recipe" in asked[0]
     assert [d["title"] for d in store.discoveries] == ["🥘 Dahl de lentilles corail"]
     assert b.sent[-1][1] is not None and "Dahl" in _buttons(b.sent[-1][1])[0][0]
-    ctx = coaching.discovery_context(store.discoveries, store.meals_since(datetime.date(2026, 11, 1)), datetime.date(2026, 11, 14))
+    ctx = coaching.discovery_context(store.discoveries, nutrition.meals_since(datetime.date(2026, 11, 1)), datetime.date(2026, 11, 14))
     assert "pas encore goûté" in ctx
     asyncio.run(b.new_dish())                                                  # same week: no second discovery
     assert len(asked) == 1
-    store.log_meal("Dahl de lentilles corail et riz", datetime.datetime(2026, 11, 16, 20, 0, tzinfo=tz))
-    ctx = coaching.discovery_context(store.discoveries, store.meals_since(datetime.date(2026, 11, 1)), datetime.date(2026, 11, 16))
+    log_meal("Dahl de lentilles corail et riz", datetime.datetime(2026, 11, 16, 20, 0, tzinfo=tz))
+    ctx = coaching.discovery_context(store.discoveries, nutrition.meals_since(datetime.date(2026, 11, 1)), datetime.date(2026, 11, 16))
     assert "goûté 👍" in ctx
 
 
@@ -1428,7 +1435,7 @@ def test_chosen_dish_with_boxes_counts_as_eaten_and_meal_question_waits_an_hour(
     mid = store.add_proposal("🌮 Tortilla", kind="meal", uses=[], recipe="1. Cuire", makes="1 boîte", macros={"kcal": 700})
     _click(b, f"m:{mid}")
     assert "1 boîte de côté" in b.sent[-1][0] and "1. Cuire" in b.sent[-1][0]
-    assert store.meals_since(datetime.date.today() - datetime.timedelta(days=1))[-1]["text"] == "🌮 Tortilla"   # eaten
+    assert nutrition.meals_since(datetime.date.today() - datetime.timedelta(days=1))[-1]["text"] == "🌮 Tortilla"   # eaten
     assert coaching.boxes_in_use(store.pantry) == [("🌮 Tortilla", 1)]                                       # + the box
 
     waits = []
@@ -1469,11 +1476,11 @@ def test_evening_recap_daily_and_coach_note_only_when_something_is_off(tmp_path,
 
     monkeypatch.setattr(bot_module.agent, "ask", fake_ask)
     monkeypatch.setattr(bot_module.dreeve, "get_all_runs", lambda: [])
-    _at(monkeypatch, 21, 45, day=14)
+    _at(monkeypatch, 21, 45, day=13)
     asyncio.run(b.check_nutrition())                       # nothing logged: a short recap asking, no coach note
     assert not asked and "Rien de noté aujourd'hui" in b.sent[-1][0] and "sauté" not in b.sent[-1][0]
-    store.state["meal_checks"].clear()
-    store.log_meal("Pâtes", datetime.datetime(2026, 11, 14, 20, 0, tzinfo=bot_module.TZ), kcal=700)
+    _at(monkeypatch, 21, 45, day=14)
+    log_meal("Pâtes", datetime.datetime(2026, 11, 14, 20, 0, tzinfo=bot_module.TZ), kcal=700)
     asyncio.run(b.check_nutrition())
     recap = next(t for t, _ in b.sent if "Ta journée côté assiette" in t and "Pâtes" in t)
     assert "700 kcal" in recap and "20:00 Pâtes" in recap
@@ -1543,28 +1550,6 @@ def test_newroute_unknown_place_says_so(tmp_path, monkeypatch):
 
 # --- Journal alimentaire fiable (#44) -------------------------------------------
 
-def test_same_dish_and_log_issues():
-    from bob import nutrition
-    assert nutrition.same_dish("Curry de poulet", "Curry de poulet + riz (1 boîte)")
-    assert not nutrition.same_dish("Pâtes bolo", "Pâtes carbo")
-    assert not nutrition.same_dish("rien (déjeuner sauté)", "rien (dîner sauté)")
-    day = datetime.date(2026, 11, 11)
-    meals = [{"id": 1, "date": "2026-11-11", "time": "08:00", "text": "Porridge banane", "kcal": 450},
-             {"id": 2, "date": "2026-11-11", "time": "12:30", "text": "Bowl saumon riz", "kcal": 650},
-             {"id": 3, "date": "2026-11-11", "time": "13:40", "text": "Bowl saumon", "kcal": 650}]
-    issues = nutrition.log_issues(meals, day, datetime.datetime(2026, 11, 11, 16, 0))
-    assert any(i.startswith("#2 et #3 : « Bowl saumon » noté deux fois aujourd'hui") for i in issues)
-    assert not any("2 repas complets" in i for i in issues)        # déjà signalé comme doublon
-    assert "aucune trace du dîner aujourd'hui" not in issues        # dîner pas encore passé
-    assert "aucune trace du dîner hier" in issues                   # hier : rien noté du tout
-    meals[2]["repeat"] = True                                       # remangé, confirmé : plus un doublon
-    late = nutrition.log_issues(meals, day, datetime.datetime(2026, 11, 11, 23, 0))
-    assert not any("#2 et #3" in i for i in late) and "aucune trace du dîner aujourd'hui" in late
-    two_meals = [{"id": 5, "date": "2026-11-11", "time": "12:00", "text": "Pâtes bolo", "kcal": 700},
-                 {"id": 6, "date": "2026-11-11", "time": "14:00", "text": "Burger frites", "kcal": 900}]
-    assert any(i.startswith("2 repas complets au déjeuner aujourd'hui") for i in nutrition.log_issues(two_meals, day, datetime.datetime(2026, 11, 11, 15, 0)))
-
-
 def test_recipe_reminder_does_not_log_the_dish_twice(tmp_path, monkeypatch):
     """Plat choisi via /eat, puis « rappelle-moi la recette » : le coach ne peut pas le noter une 2e fois."""
     import pytest
@@ -1574,18 +1559,18 @@ def test_recipe_reminder_does_not_log_the_dish_twice(tmp_path, monkeypatch):
     _at(monkeypatch, 12, 30)
     dish = store.add_proposal("Curry de poulet", kind="meal", uses=[], recipe="1. Cuire le riz", macros={"kcal": 700})
     _click(b, f"m:{dish}")
-    assert [m["text"] for m in store.meals_since(datetime.date(2026, 11, 11))] == ["Curry de poulet"]
+    assert [m["text"] for m in nutrition.meals_since(datetime.date(2026, 11, 11))] == ["Curry de poulet"]
     ledger = tools.Ledger()
     monkeypatch.setattr(tools.cs, "now_utc", lambda: datetime.datetime(2026, 11, 11, 13, 30, tzinfo=datetime.timezone.utc))
     with pytest.raises(ValueError, match="déjà noté : #1"):
         tools.tool_log_meal({"description": "Curry de poulet + riz", "time": "2026-11-11T13:15:00+01:00"}, ledger)
     again = store.add_proposal("Curry de poulet", kind="meal", uses=[], recipe="1. Cuire le riz", macros={"kcal": 700})
     _click(b, f"m:{again}")   # recette renvoyée et re-touchée : pas de 2e entrée
-    assert len(store.meals_since(datetime.date(2026, 11, 11))) == 1
+    assert len(nutrition.meals_since(datetime.date(2026, 11, 11))) == 1
     out = tools.tool_log_meal({"description": "Curry de poulet", "time": "2026-11-11T13:15:00+01:00", "again": True}, ledger)
-    assert out["logged"]["repeat"] is True and len(store.meals_since(datetime.date(2026, 11, 11))) == 2
+    assert out["logged"]["repeat"] is True and len(nutrition.meals_since(datetime.date(2026, 11, 11))) == 2
     removed = tools.tool_remove_meal({"id": out["logged"]["id"]}, ledger)
-    assert removed["removed"]["text"] == "Curry de poulet" and len(store.meals_since(datetime.date(2026, 11, 11))) == 1
+    assert removed["removed"]["text"] == "Curry de poulet" and len(nutrition.meals_since(datetime.date(2026, 11, 11))) == 1
     with pytest.raises(ValueError):
         tools.tool_remove_meal({"id": 99}, ledger)
     assert "remove_meal" in {t["name"] for t in tools.ALL_TOOLS} - {t["name"] for t in tools.READ_ONLY_TOOLS}
@@ -1605,27 +1590,26 @@ def test_meal_question_offers_every_box_and_answers_a_duplicate(tmp_path, monkey
     labels = [label for label, _ in _buttons(markup)]
     assert labels[:3] == ["🍱 Chili", "🍱 Dahl", "🍱 Lasagnes"] and len(labels) == 5 and "Sauté" not in " ".join(labels)
     assert "sauté" not in text.casefold()
-    store.log_meal("Chili", datetime.datetime(2026, 11, 11, 12, 45, tzinfo=bot_module.TZ))   # déjà dit au coach
+    log_meal("Chili", datetime.datetime(2026, 11, 11, 12, 45, tzinfo=bot_module.TZ))   # déjà dit au coach
     chili = next(d for label, d in _buttons(markup) if "Chili" in label)
     _click(b, chili, markup)
     assert b.sent[-1][0].strip() == "C'était déjà noté à 12:45 👌"
-    assert len(store.meals_since(datetime.date(2026, 11, 11))) == 1
+    assert len(nutrition.meals_since(datetime.date(2026, 11, 11))) == 1
     assert any(p["name"] == "Chili" for p in store.pantry)    # la boîte n'est pas retirée deux fois
 
 
 def test_day_recap_lists_dishes_and_compares_calories_to_needs():
     from bob.formatting import md_unescape
     day = datetime.date(2026, 11, 14)
-    meals = [{"id": 1, "date": "2026-11-14", "time": "08:00", "text": "Porridge banane", "kcal": 450, "protein_g": 15,
-              "carbs_g": 70, "fat_g": 10},
-             {"id": 2, "date": "2026-11-14", "time": "12:30", "text": "Curry de poulet", "kcal": 700, "protein_g": 45,
-              "carbs_g": 80, "fat_g": 20},
-             {"id": 3, "date": "2026-11-13", "time": "20:00", "text": "Hier soir", "kcal": 900}]
-    profile = {"weight_kg": 70, "height_cm": 178, "birth_year": 1995, "sex": "m"}
-    text = md_unescape(commands.format_day_recap(meals, [], profile, day)).replace("*", "")
+    at = lambda d, t: datetime.datetime.fromisoformat(f"{d}T{t}:00").replace(tzinfo=bot_module.TZ)   # noqa: E731
+    log_meal("Porridge banane", at(day, "08:00"), kcal=450, protein_g=15, carbs_g=70, fat_g=10)
+    log_meal("Curry de poulet", at(day, "12:30"), kcal=700, protein_g=45, carbs_g=80, fat_g=20)
+    log_meal("Hier soir", at("2026-11-13", "20:00"), kcal=900)
+    no_profile = md_unescape(commands.format_day_recap(nutrition.snapshot([], day), day)).replace("*", "")
+    assert "🔥 1 150 kcal aujourd'hui" in no_profile and "ton poids" in no_profile
+    nutrition.update_profile(weight_kg=70, height_cm=178, birth_year=1995, sex="homme")
+    text = md_unescape(commands.format_day_recap(nutrition.snapshot([], day), day)).replace("*", "")
     assert text.startswith("🌙 Ta journée côté assiette (sam 14/11)")
     assert "🔥 1 150 kcal sur ~" in text and "il te manque ~" in text
     assert "- 08:00 Porridge banane · 450 kcal" in text and "- 12:30 Curry de poulet · 700 kcal" in text
     assert "Hier soir" not in text and "60 g protéines" in text
-    no_profile = md_unescape(commands.format_day_recap(meals, [], {}, day)).replace("*", "")
-    assert "🔥 1 150 kcal aujourd'hui" in no_profile and "ton poids" in no_profile

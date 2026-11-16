@@ -65,15 +65,22 @@ from bob import agent, commands, recipes, routes, voice, weather, weather_alerts
 from bob.config import TZ, settings
 from bob.handlers import ui
 day = datetime.date(2026, 11, 14)
-meals = [{"id": 1, "date": "2026-11-14", "time": "08:00", "text": "Porridge", "kcal": 450, "protein_g": 15, "carbs_g": 70, "fat_g": 10}]
-profile = {"weight_kg": 70, "height_cm": 178, "birth_year": 1995, "sex": "m"}
+import pathlib, tempfile
+from bob import nutrition
+from bob.services import remy as remy_service
+from tests.conftest import LocalRemy
+remy_service.client = LocalRemy(pathlib.Path(tempfile.mkdtemp()))   # le vrai Remy, dans le processus
+nutrition.update_profile(weight_kg=70, height_cm=178, birth_year=1995, sex="homme")
+nutrition.log_meal("Porridge", datetime.datetime(2026, 11, 14, 8, 0, tzinfo=TZ),
+                   estimate={"kcal": 450, "protein_g": 15, "carbs_g": 70, "fat_g": 10})
+snap = nutrition.snapshot([], day)
 lp = routes.Loop(points=[], km=6.24, quiet=.5, calm=.4, busy=0, paved=1, crossings=12, marked=.3)
 n = wa.Notice("alert", key="k", uid="u", summary="Easy run", start=datetime.datetime(2026, 11, 15, 18, tzinfo=TZ),
               end=datetime.datetime(2026, 11, 15, 19, tzinfo=TZ), place="Home", hazards={"pluie": "80 %, 2.0 mm"}, others={"Work": {}})
 daily = {"time": ["2026-11-15"], "weathercode": [61], "temperature_2m_min": [4.0], "temperature_2m_max": [11.0],
          "precipitation_sum": [2.4], "precipitation_probability_max": [80], "windspeed_10m_max": [20.0]}
 out = [commands.HELP_TEXT, *(c.description for c in commands.BOT_COMMANDS),
-       commands.format_day_recap(meals, [], profile, day), commands.format_nutrition(meals, [], profile, day),
+       commands.format_day_recap(snap, day), commands.format_nutrition(snap, nutrition.meals_since(day), day),
        commands.format_agenda([], 7), commands.format_stock_reply([], day), commands.format_goals_reply([], day),
        commands.format_form({"tsb": {}, "acRatio": {}}, [], day), routes.describe(lp, "route"), routes.describe(lp, "nature"),
        wa.format_notice(n, datetime.datetime(2026, 11, 14, 20, tzinfo=TZ)), weather.format_forecast([daily], ["Home"], {"Home": []}),

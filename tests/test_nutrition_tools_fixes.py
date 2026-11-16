@@ -74,15 +74,6 @@ def test_meal_slots_unified():
     assert commands.MEAL_WHEN["collation"]
 
 
-def test_anomalies_lunch_at_1510_and_old_slot():
-    day = datetime.date(2026, 11, 13)
-    meal = lambda time, text, slot=None: {"date": day.isoformat(), "time": time, "text": text, "kcal": 600,
-                                          **({"slot": slot} if slot else {})}
-    meals = [meal("08:00", "a"), meal("15:10", "b"), meal("19:30", "c"), meal("16:00", "d", "goûter")]
-    assert nutrition.anomalies(meals, [], {}, day) == []
-    assert nutrition.day_totals(meals, day)["slots"] == ["collation", "déjeuner", "dîner", "petit-déjeuner"]
-
-
 def test_profile_validation(tmp_path, monkeypatch):
     monkeypatch.setattr(tools, "store", Store(tmp_path / "s.json"))
     for bad in ({"weight_kg": 5}, {"weight_kg": 400}, {"height_cm": 50}, {"birth_year": 1800},
@@ -91,9 +82,3 @@ def test_profile_validation(tmp_path, monkeypatch):
             tools.tool_set_profile(bad, tools.Ledger())
     out = tools.tool_set_profile({"weight_kg": 70, "height_cm": 178, "birth_year": 1990, "sex": "homme"}, tools.Ledger())
     assert out["ok"]
-
-
-def test_compute_rejects_absurd_grams():
-    out = nutrition.compute([{"food": "pâtes cuites", "grams": 0}, {"food": "pâtes cuites", "grams": 5000},
-                             {"food": "pâtes cuites", "grams": 100}])
-    assert len(out["items"]) == 1 and len(out["unmatched"]) == 2

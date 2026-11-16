@@ -3,7 +3,8 @@ import os
 
 import pytest
 
-pytestmark = pytest.mark.skipif(not os.getenv("BOB_LIVE_SERVICES"), reason="services réels non démarrés")
+pytestmark = [pytest.mark.live,
+              pytest.mark.skipif(not os.getenv("BOB_LIVE_SERVICES"), reason="services réels non démarrés")]
 
 
 @pytest.fixture(scope="module")
@@ -40,3 +41,19 @@ def test_a_wrong_key_is_reported_as_unauthorized(adapters):
         RemyClient(settings.remy_url, "remy_wrong").profile()
     with pytest.raises(Unauthorized), emile.calls():
         Emile(settings.emile_url, "emile_wrong").me()
+
+
+def test_bob_nutrition_round_trip_on_the_real_remy(adapters):
+    import datetime
+
+    from bob import nutrition
+    from bob.config import TZ
+    at = datetime.datetime.now(TZ) - datetime.timedelta(hours=1)
+    meal, dup, unmatched = nutrition.log_meal("Riz poulet", at, items=[{"food": "riz blanc cuit", "grams": 200}])
+    assert dup is None and not unmatched and meal["kcal"] > 0
+    again, dup, __ = nutrition.log_meal("Riz poulet", at)
+    assert again is None and dup["id"] == meal["id"]                       # doublon : rien de gardé
+    assert [m["id"] for m in nutrition.meals_since(at.date())] == [meal["id"]]
+    snap = nutrition.snapshot([], at.date())
+    assert snap.today.meals == 1 and "profil incomplet" in nutrition.energy_context(snap, at.date())
+    assert nutrition.remove_meal(meal["id"])["text"] == "Riz poulet"

@@ -122,6 +122,8 @@ MESSAGES: dict[str, str] = {
         "😋 You've got {left} left.",
     "😋 C'était la dernière boîte !":
         '😋 That was the last box!',
+    "Le journal des repas ne répond pas, rien n'a été noté. Réessaie dans un moment.":
+        "The meal log isn't answering, nothing was saved. Try again in a moment.",
     'Ça arrive 😅 Pense à bien manger au prochain repas.':
         'It happens 😅 Make sure you eat well at your next meal.',
     'Ok 👌':

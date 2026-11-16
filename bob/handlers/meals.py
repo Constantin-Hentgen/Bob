@@ -8,6 +8,7 @@ from telegram.ext import ContextTypes
 
 from .. import agent, coaching, commands, dreeve, nutrition
 from ..config import TZ, settings
+from ..services import ServiceError
 from ..formatting import md_escape, md_unescape
 from ..memory import store
 from .ui import MEAL_SLOT_WHEN, close_meal_guesses, has_recipe, meal_guesses, meal_rows, recent_eat_options, without_button
@@ -48,7 +49,18 @@ class MealsMixin:
             return
         logs = item.get("check") or item.get("recipe") or not item.get("makes")   # ce bouton note un repas mangé
         when = datetime.datetime.fromisoformat(item["at"]) if item.get("check") and item.get("at") else datetime.datetime.now(TZ)
-        dup = store.similar_meal(item["text"], when) if logs else None   # déjà noté : ni journal ni stock en double
+        dup = None
+        if logs:   # au journal (Remy) d'abord : un plat déjà noté n'y entre pas, et ne sort pas deux fois du stock
+            macros = item.get("macros") or {}
+            try:
+                __, dup, __ = await asyncio.to_thread(nutrition.log_meal, item["text"], when, source="bouton",
+                                                      items=macros.get("items"), estimate=macros)
+            except ServiceError as e:
+                logger.error(f"Repas non noté : {e}")
+                store.reopen_proposal(mid)
+                await query.answer(_("Le journal des repas ne répond pas, rien n'a été noté. Réessaie dans un moment."),
+                                   show_alert=True)
+                return
         r = store.update_pantry(remove=[] if dup else (item.get("uses") or []))
         await query.answer()
         if item.get("check"):   # réponse à « tu as mangé quoi ? » : une ligne, et la question est close
@@ -68,9 +80,7 @@ class MealsMixin:
             store.update_pantry(add=[{"name": item["text"], "qty": item["makes"], "keeps_days": 4, "boxes": True}])
             changes.append(f"+{item['text']} ({item['makes']})")
             text = _("Top, {boxes} de côté pour les prochains jours 🙌").format(boxes=md_escape(item['makes']))
-        if (item.get("recipe") or not item.get("makes")) and not dup:   # /eat (choisi = mangé) ou plat mangé : au journal
-            macros = item.get("macros") or {}
-            store.log_meal(item["text"], datetime.datetime.now(TZ), source="bouton", **macros)
+        if (item.get("recipe") or not item.get("makes")) and not dup:   # /eat (choisi = mangé) ou plat mangé : noté
             text = _("Bon app' 😋") if not item.get("makes") else text
         if item.get("recipe"):   # plat choisi : la recette, simplement
             boxes = _(" (et {boxes} de côté 🙌)").format(boxes=md_escape(item['makes'])) if item.get("makes") else ""
@@ -80,7 +90,8 @@ class MealsMixin:
         await agent.add_to_history(self.chat_id, f"[L'athlète a confirmé avoir mangé / cuisiné : {item['text']}]", md_unescape(text))
 
     async def _on_meal_guess(self, query, item: dict, r: dict, dup: dict | None = None) -> None:
-        store.set_meal_check(item["check"], "answered")
+        """Le repas est déjà au journal (ou y était déjà : `dup`) ; la question « tu as mangé quoi ? » est close."""
+        await self._meal_check(item["check"], "answered")
         if item.get("source"):   # le plat proposé à l'origine est mangé : plus un candidat pour le prochain repas
             store.close_proposal(item["source"], "applied")
         close_meal_guesses(query.message.reply_markup)
@@ -88,8 +99,6 @@ class MealsMixin:
             await query.edit_message_reply_markup(None)
             await self._push(_("C'était déjà noté à {time} 👌").format(time=dup['time']))
             return
-        macros = item.get("macros") or {}
-        store.log_meal(item["text"], datetime.datetime.fromisoformat(item["at"]), source="bouton", **macros)
         box = next((u for u in item.get("uses") or [] if u.get("name", "").casefold() == item["text"].casefold()), None)
         if box and box.get("qty_left"):
             text = _("😋 Il t'en reste {left}.").format(left=md_escape(box['qty_left']))
@@ -101,44 +110,56 @@ class MealsMixin:
         await self._push(text)
         await agent.add_to_history(self.chat_id, f"[L'athlète a répondu avoir mangé : {item['text']}]", md_unescape(text))
 
+    async def _meal_check(self, key: str, status: str) -> None:
+        """Note qu'une question repas (ou le bilan du soir) est faite ; une panne de Remy ne bloque pas la réponse."""
+        try:
+            await asyncio.to_thread(nutrition.set_meal_check, key, status)
+        except ServiceError as e:
+            logger.error(f"Question repas {key} non notée ({status}) : {e}")
+
     async def _on_meal_question(self, update: Update, action: str, day: str, index: int) -> None:
         """« Qu'as-tu mangé ? » : Sauté (noté comme repas vide, à la fin de sa plage) ou Passer (on n'en parle plus)."""
         query = update.callback_query
-        await query.answer()
         __, end, slot = coaching.meal_window(settings.meal_check_times, index)
         key = f"{day} {slot}"
-        close_meal_guesses(query.message.reply_markup)
         if action == "s":
             at = datetime.datetime.combine(datetime.date.fromisoformat(day), end, tzinfo=TZ)
-            store.log_meal(f"rien ({slot} sauté)", at, source="bouton", kcal=0, protein_g=0, carbs_g=0)
-            store.set_meal_check(key, "answered")
+            try:
+                await asyncio.to_thread(nutrition.log_meal, f"rien ({slot} sauté)", at, source="bouton",
+                                        estimate={"kcal": 0, "protein_g": 0, "carbs_g": 0}, repeat=True)
+            except ServiceError as e:
+                logger.error(f"Repas sauté non noté : {e}")
+                await query.answer(_("Le journal des repas ne répond pas, rien n'a été noté. Réessaie dans un moment."),
+                                   show_alert=True)
+                return
+            await self._meal_check(key, "answered")
             text = _("Ça arrive 😅 Pense à bien manger au prochain repas.")
         else:
-            store.set_meal_check(key, "skipped")
+            await self._meal_check(key, "skipped")
             text = _("Ok 👌")
+        await query.answer()
+        close_meal_guesses(query.message.reply_markup)
         await query.edit_message_reply_markup(None)
         await self._push(text)
         await agent.add_to_history(self.chat_id, f"[Réponse à « qu'as-tu mangé ? » ({slot})]", text)
 
     async def check_nutrition(self) -> None:
-        """Le soir (NUTRITION_CHECK_TIME) : le bilan du jour (plats, calories face aux besoins, macros), calculé par le
-        code ; puis, si la journée manque de quelque chose (apports bas, repas léger ou sans trace, doublon dans le
+        """Le soir (NUTRITION_CHECK_TIME) : le bilan du jour (plats, calories face aux besoins, macros), calculé par
+        Remy ; puis, si la journée manque de quelque chose (apports bas, repas léger ou sans trace, doublon dans le
         journal…), un mot bienveillant du coach."""
         now = datetime.datetime.now(TZ)
         today = now.date()
         key = f"{today.isoformat()} nutrition"
         try:
-            if store.meal_check(key):
+            if await asyncio.to_thread(nutrition.meal_check, key):
                 return
             runs = await asyncio.to_thread(dreeve.get_all_runs) if settings.dreeve_enabled else []
-            meals = store.meals_since(today - datetime.timedelta(days=1))
-            store.set_meal_check(key, "checked")
-            recap = commands.format_day_recap(meals, runs, store.profile, today)
+            snap = await asyncio.to_thread(nutrition.snapshot, runs, today)
+            await asyncio.to_thread(nutrition.set_meal_check, key, "checked")
+            recap = commands.format_day_recap(snap, today)
             await self._push(recap)
             await agent.add_to_history(self.chat_id, "[Bilan nutrition du soir envoyé par le système]", md_unescape(recap))
-            issues = nutrition.anomalies(meals, runs, store.profile, today)
-            issues += [i for i in nutrition.log_issues(meals, today, now)
-                       if "aujourd'hui" in i and ("deux fois" in i or "repas complets" in i)]   # doublons du journal
+            issues = nutrition.evening_issues(snap)
             if not issues:
                 return
             logger.info(f"Contrôle nutrition : {issues}")
@@ -186,7 +207,9 @@ class MealsMixin:
         start, end, slot = coaching.meal_window(settings.meal_check_times, index)
         key = f"{now.date().isoformat()} {slot}"
         try:
-            if store.meal_check(key) or coaching.has_meal_between(store.meals_since(now.date()), now.date(), start, end):
+            if (await asyncio.to_thread(nutrition.meal_check, key)
+                    or coaching.has_meal_between(await asyncio.to_thread(nutrition.meals_since, now.date()), now.date(),
+                                                 start, end)):
                 return
             # on part de ce qu'on sait (boîtes prêtes, plats proposés) : un geste suffit dans le cas courant
             at = datetime.datetime.combine(now.date(), end, tzinfo=TZ).isoformat()
@@ -200,7 +223,7 @@ class MealsMixin:
             text = _("🍽️ *{when}, tu as mangé quoi ?*").format(when=MEAL_SLOT_WHEN[slot]) + f"\n{hint}"
             markup = InlineKeyboardMarkup(rows) if rows else None   # jamais de bouton « sauté »
             await self._push(text, markup)
-            store.set_meal_check(key, "asked")
+            await self._meal_check(key, "asked")
             await agent.add_to_history(self.chat_id, f"[Question automatique du système : repas ({slot}) non noté]",
                                        md_unescape(text))
         except Exception:
@@ -213,7 +236,7 @@ class MealsMixin:
         try:
             if recent_eat_options(now):   # /eat vient d'être demandé : ses plats sont encore là
                 return
-            if coaching.has_meal_between(store.meals_since(now.date()), now.date(),
+            if coaching.has_meal_between(await asyncio.to_thread(nutrition.meals_since, now.date()), now.date(),
                                          (now - datetime.timedelta(minutes=90)).time(), now.time()):
                 return
             reply = await asyncio.wait_for(agent.ask(commands.eat_prompt(now, spontaneous=True), chat_id=self.chat_id,

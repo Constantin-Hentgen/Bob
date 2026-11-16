@@ -200,10 +200,9 @@ def _macros(kcal, protein, carbs, fat=None) -> str:
     return ", ".join(p for p in parts if p)
 
 
-def meals_context(meals: list[dict], today: datetime.date, now: datetime.datetime | None = None) -> str:
-    """Repas notés (aujourd'hui et hier) avec leur n°, le total estimé du jour et ce qui est à vérifier."""
-    from .nutrition import log_issues
-    issues = log_issues(meals, today, now) if now else []
+def meals_context(meals: list[dict], today: datetime.date, issues: list[str] = ()) -> str:
+    """Repas notés (aujourd'hui et hier) avec leur n°, le total estimé du jour et ce qui est à vérifier (`issues`,
+    calculé par Remy : `nutrition.log_issues`)."""
     check = ("\nÀ VÉRIFIER (calculé par le système) :\n" + "\n".join(f"- {i}" for i in issues)) if issues else ""
     if not meals:
         return "aucun repas noté aujourd'hui ni hier" + check

@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 
 from . import calendar_store as cs
 from . import coaching, dreeve, dreeve_mcp, llm, nutrition, weather
+from .services import ServiceError
 from .config import DAYS_LONG, TZ, TZ_LABEL, UTC, settings
 from .i18n import _, language_name
 from .memory import store
@@ -342,6 +343,25 @@ def _system_blocks() -> list[str]:
     ]
 
 
+def _nutrition_context(runs: list[dict], now: datetime.datetime) -> tuple[str, str, str, str]:
+    """Repas notés, bilan nutritionnel, variété et plat découverte, lus chez Remy. Remy injoignable : le coach le sait
+    et ne prétend rien enregistrer."""
+    today = now.date()
+    try:
+        meals = nutrition.meals_since(today - datetime.timedelta(days=coaching.VARIETY_DAYS))
+        snap = nutrition.snapshot(runs, today)
+    except ServiceError as e:
+        logger.error(f"Nutrition indisponible : {e}")
+        off = (f"INDISPONIBLE ({e.service} ne répond pas : {e.detail}). Aucun repas ne peut être noté ni lu pour "
+               "l'instant : dis-le simplement si on t'en parle.")
+        return off, off, off, off
+    since = lambda days: (today - datetime.timedelta(days=days)).isoformat()   # noqa: E731
+    recent = [m for m in meals if m["date"] >= since(1)]
+    week = [m for m in meals if m["date"] >= since(8)]
+    return (coaching.meals_context(recent, today, nutrition.log_issues(snap)), nutrition.energy_context(snap, today),
+            coaching.meal_variety(meals, today), coaching.discovery_context(store.discoveries, week, today))
+
+
 async def _gather_context() -> str:
     today = datetime.datetime.now(TZ).replace(hour=0, minute=0, second=0, microsecond=0).astimezone(UTC)
     forecast, cal_result, dreeve_ctx = await asyncio.gather(
@@ -372,6 +392,7 @@ async def _gather_context() -> str:
             forecast = "indisponible"
 
     now = datetime.datetime.now(TZ)
+    meals_text, energy_text, variety_text, discovery_text = await asyncio.to_thread(_nutrition_context, all_runs, now)
     return (
         "DONNÉES EN TEMPS RÉEL DU SYSTÈME :\n"
         f"- Date et heure actuelles : {DAYS_LONG[now.weekday()]} {now:%d/%m/%Y %H:%M} ({TZ_LABEL})\n"
@@ -379,11 +400,10 @@ async def _gather_context() -> str:
         f"- Ressentis après séance (14 derniers jours) :\n{coaching.checkins_context(store.recent_checkins(14, now.date()))}\n"
         f"- Stock en cuisine :\n{coaching.pantry_context(store.pantry, now.date())}\n"
         f"- Boîtes repas (tups) : {coaching.boxes_context(store.pantry, settings.meal_boxes)}\n"
-        f"- Repas notés :\n{coaching.meals_context(store.meals_since(now.date() - datetime.timedelta(days=1)), now.date(), now)}\n"
-        f"- Bilan nutritionnel (calculé par le système, table Ciqual) :\n"
-        f"{nutrition.energy_context(store.meals_since(now.date() - datetime.timedelta(days=8)), all_runs, store.profile, now.date())}\n"
-        f"- Variété des repas : {coaching.meal_variety(store.meals_since(now.date() - datetime.timedelta(days=coaching.VARIETY_DAYS)), now.date())}\n"
-        f"- Plat découverte de la semaine : {coaching.discovery_context(store.discoveries, store.meals_since(now.date() - datetime.timedelta(days=8)), now.date())}\n"
+        f"- Repas notés :\n{meals_text}\n"
+        f"- Bilan nutritionnel (calculé par le système, table Ciqual) :\n{energy_text}\n"
+        f"- Variété des repas : {variety_text}\n"
+        f"- Plat découverte de la semaine : {discovery_text}\n"
         f"- Liste de courses en cours {coaching.shopping_context(store.shopping_list)}\n"
         f"- Prévisions météo :{forecast}\n"
         + (f"- Échange : {'ce message OUVRE une nouvelle session' if store.session_opening() else 'session en cours'} ; "
