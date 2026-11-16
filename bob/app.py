@@ -14,10 +14,22 @@ from . import dreeve, dreeve_mcp, weather
 from .bot import BOT_NAME, build_bot
 from .commands import BOT_COMMANDS
 from .config import UTC, settings
+from .services import STATUS, ServiceError
+from .services import emile as emile_service
+from .services import remy as remy_service
 
 logging.basicConfig(level=(os.getenv("LOG_LEVEL") or "INFO").strip().upper(), format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logging.getLogger("httpx").setLevel(logging.WARNING)   # sinon une ligne par long-polling Telegram
 logger = logging.getLogger("bob")
+
+
+SERVICES = (remy_service, emile_service)   # services voisins du même stack
+
+
+def services_health() -> dict[str, dict[str, object]]:
+    """État des services voisins configurés : dernier appel connu (pas de requête ici, /health reste instantané)."""
+    return {s.NAME.lower(): STATUS.get(s.NAME, {"ok": None, "error": None, "at": None})
+            for s in SERVICES if s.enabled()}
 
 
 def verify_services_connectivity() -> None:
@@ -43,6 +55,13 @@ def verify_services_connectivity() -> None:
             logger.info(f"[CALDAV] Agenda OK : {len(events)} événement(s) sur 7 jours ({skipped} illisible(s)).")
         except Exception as e:
             logger.error(f"[CALDAV] Échec de connexion à l'agenda : {e}")
+
+    for service in SERVICES:
+        if service.enabled():
+            try:
+                logger.info(f"[{service.NAME.upper()}] OK ({service.url()}) : {service.ping()}")
+            except ServiceError as e:
+                logger.error(f"[{service.NAME.upper()}] {e}")
     logger.info("=== FIN DU TEST DE CONNECTIVITÉ ===")
 
 
@@ -152,5 +171,6 @@ def health_check():
     from .memory import store
     activity = dict(ACTIVITY_STATUS, poll_minutes=settings.activity_poll_minutes,
                     dreeve_enabled=settings.dreeve_enabled, last_activity_id=store.last_activity_id)
-    return {"status": "running", "telegram": getattr(app.state, "telegram_running", False), "activity": activity}
+    return {"status": "running", "telegram": getattr(app.state, "telegram_running", False), "activity": activity,
+            "services": services_health()}
 
