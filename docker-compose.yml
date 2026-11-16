@@ -78,6 +78,11 @@ services:
       CALENDAR_CONTEXT_DAYS: ${CALENDAR_CONTEXT_DAYS:-}
       HISTORY_MESSAGES: ${HISTORY_MESSAGES:-}
       COACH_SEED_MEMORY: ${COACH_SEED_MEMORY:-}
+      # Services voisins, dans ce même stack (voir le wiki « Services ») : seule la clé d'API est à saisir
+      REMY_URL: ${REMY_URL:-}
+      REMY_API_KEY: ${REMY_API_KEY:-}
+      EMILE_URL: ${EMILE_URL:-}
+      EMILE_API_KEY: ${EMILE_API_KEY:-}
       # Technique
       HTTP_TIMEOUT: ${HTTP_TIMEOUT:-}
       LOG_LEVEL: ${LOG_LEVEL:-}
@@ -90,6 +95,36 @@ services:
       - "${COACH_PORT:-18000}:8000"
     volumes:
       - coach-data:/data
+    depends_on:
+      - remy
+      - emile
+
+  # Nutrition : journal des repas, profil, besoins, bilans (https://github.com/Constantin-Hentgen/Remy).
+  # Aucun port publié : seul Bob lui parle, sur le réseau du stack (http://remy:8000).
+  remy:
+    image: ghcr.io/constantin-hentgen/remy:0.6.0   # même version que le client dans pyproject.toml
+    container_name: remy
+    restart: unless-stopped
+    environment:
+      REMY_ADMIN_KEY: ${REMY_ADMIN_KEY:-}
+      LOG_LEVEL: ${REMY_LOG_LEVEL:-}
+      TZ: ${COACH_TZ:-Europe/Paris}
+    volumes:
+      - remy-data:/data
+
+  # Courses : liste, stock, boîtes, recettes, agenda courses (https://github.com/Constantin-Hentgen/Emile).
+  emile:
+    image: ghcr.io/constantin-hentgen/emile:0.5.0   # même version que le client dans pyproject.toml
+    container_name: emile
+    restart: unless-stopped
+    environment:
+      EMILE_SECRET_KEY: ${EMILE_SECRET_KEY:-}   # chiffre les identifiants de l'agenda courses
+      EMILE_DEFAULT_TIMEZONE: ${COACH_TZ:-Europe/Paris}
+      TZ: ${COACH_TZ:-Europe/Paris}
+    volumes:
+      - emile-data:/data
 
 volumes:
   coach-data:
+  remy-data:
+  emile-data:

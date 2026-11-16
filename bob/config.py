@@ -223,6 +223,11 @@ class Settings:
     seed_memory: str | None
     data_dir: str
     http_timeout: int
+    # Services voisins (même stack Docker) : nutrition (Remy), courses (Emile)
+    remy_url: str
+    remy_api_key: str | None
+    emile_url: str
+    emile_api_key: str | None
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -286,11 +291,23 @@ class Settings:
             seed_memory=_str("COACH_SEED_MEMORY"),
             data_dir=_str("COACH_DATA_DIR", "data"),
             http_timeout=_int("HTTP_TIMEOUT", 8),
+            remy_url=_str("REMY_URL", "http://remy:8000").rstrip("/"),
+            remy_api_key=_str("REMY_API_KEY"),
+            emile_url=_str("EMILE_URL", "http://emile:8000").rstrip("/"),
+            emile_api_key=_str("EMILE_API_KEY"),
         )
 
     @property
     def dreeve_enabled(self) -> bool:
         return bool(self.dreeve_url and self.dreeve_api_key)
+
+    @property
+    def remy_enabled(self) -> bool:
+        return bool(self.remy_url and self.remy_api_key)
+
+    @property
+    def emile_enabled(self) -> bool:
+        return bool(self.emile_url and self.emile_api_key)
 
     @property
     def weather_enabled(self) -> bool:
@@ -317,6 +334,8 @@ class Settings:
             "Liste de courses dans l'agenda courses (CALDAV_SHOPPING_URL)": self.caldav_shopping_url,
             f"Messages vocaux (WHISPER_MODEL={self.whisper_model or 'off'})": self.whisper_model,
             f"Météo ({', '.join(n for n, __, __ in self.weather_locations) or 'WEATHER_LOCATIONS'})": self.weather_enabled,
+            f"Remy, nutrition ({self.remy_url}, REMY_API_KEY)": self.remy_enabled,
+            f"Emile, courses ({self.emile_url}, EMILE_API_KEY)": self.emile_enabled,
         }
         for name, ok in optional.items():
             logger.info(f"[CONFIG] {name} : {'activé' if ok else 'désactivé'}")

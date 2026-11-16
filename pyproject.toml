@@ -4,7 +4,7 @@ version = "5.0.0"
 description = "Bob, a self-hosted AI running coach on Telegram"
 license = "MIT"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.13"
 dependencies = [
     "fastapi>=0.110.0",
     "uvicorn>=0.28.0",
@@ -20,6 +20,8 @@ dependencies = [
     "faster-whisper>=1.1",
     "av>=11,<19",
     "staticmap>=0.5.7",
+    "remy[client]",
+    "emile[client]",
 ]
 
 [dependency-groups]
@@ -30,6 +32,10 @@ dev = [
 
 [tool.uv]
 package = false
+
+[tool.uv.sources]
+remy = { url = "https://github.com/Constantin-Hentgen/Remy/archive/refs/tags/v0.6.0.tar.gz" }
+emile = { url = "https://github.com/Constantin-Hentgen/Emile/archive/refs/tags/v0.5.0.tar.gz" }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
