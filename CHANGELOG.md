@@ -2,6 +2,26 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.0.0](https://github.com/Constantin-Hentgen/Bob/compare/v5.1.0...v6.0.0) (2026-11-17)
+
+
+### ⚠ BREAKING CHANGES
+
+* Meals, profile and meal questions are stored in Remy: set `REMY_API_KEY` and import the meal history with `remy import bob` before deploying (wiki: Services).
+* The shopping list, stock, meal-prep boxes and recipes are stored in Emile, which also writes the shopping calendar: set `EMILE_API_KEY` and `EMILE_SECRET_KEY`, import with `emile import bob` and register the calendar once in Emile. `CALDAV_SHOPPING_URL` (and `RADICALE_SHOPPING_URL`, `RADICALE_TASKS_URL`) and `MEAL_BOXES` are no longer read.
+* The stack builds Dora and its own BRouter: the first start downloads the map tiles (about 1.5 GB) and needs about 2 GB of disk and 1.5 GB of RAM more. Routes no longer use the public brouter.de.
+
+### Added
+
+* groceries, stock and recipes come from Emile (0.6.0), and the coach can add to what is in stock ([#78](https://github.com/Constantin-Hentgen/Bob/issues/78)) ([19ca3b9](https://github.com/Constantin-Hentgen/Bob/commit/19ca3b9c7ff59e531d273f43bea9df64e488a48f))
+* meals, profile and nutrition come from Remy ([#77](https://github.com/Constantin-Hentgen/Bob/issues/77)) ([c8009e6](https://github.com/Constantin-Hentgen/Bob/commit/c8009e62b9f0fb5ace808e3187c8b210941d27b1))
+* running loops come from Dora ([#79](https://github.com/Constantin-Hentgen/Bob/issues/79)) ([6333b9e](https://github.com/Constantin-Hentgen/Bob/commit/6333b9e9725d5ffc9641e8515a91ac677eae3ae2))
+
+
+### Fixed
+
+* **compose:** never pull Dora's and BRouter's built images ([#82](https://github.com/Constantin-Hentgen/Bob/issues/82)) ([8c2bb66](https://github.com/Constantin-Hentgen/Bob/commit/8c2bb66d9e1284ab24d17364487857b86b90264f))
+
 ## [5.1.0](https://github.com/Constantin-Hentgen/Bob/compare/v5.0.0...v5.1.0) (2026-11-16)
 
 
