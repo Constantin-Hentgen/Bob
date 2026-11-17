@@ -16,6 +16,7 @@ from bob.services import emile as emile_service
 from bob.services import remy as remy_service
 
 ROOT = Path(__file__).resolve().parent.parent
+REAL_REMY_CLIENT = remy_service.client   # avant que conftest.py ne le remplace par un Remy local
 
 
 @pytest.fixture(autouse=True)
@@ -58,9 +59,9 @@ def test_a_normal_error_answer_still_means_the_service_is_up():
 
 def test_a_service_without_api_key_is_not_configured(monkeypatch):
     monkeypatch.setattr(remy_service, "enabled", lambda: False)
-    remy_service.client.cache_clear()
+    REAL_REMY_CLIENT.cache_clear()
     with pytest.raises(NotConfigured), remy_service.calls():
-        remy_service.client()
+        REAL_REMY_CLIENT()
 
 
 def test_health_lists_only_the_configured_services(monkeypatch):

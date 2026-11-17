@@ -36,7 +36,6 @@ MAX_SHOPPING_ITEMS = 60   # boutons Telegram : 100 max par message, rayons compr
 MAX_PANTRY_ITEMS = 120
 MAX_KEEPS_DAYS = 60       # au-delà : produit qui se garde, pas de date
 PANTRY_ASK_GRACE_DAYS = 3 # « Encore là ? » sans réponse depuis ce délai : l'article sort du stock
-MEAL_LOG_DAYS = 30        # journal alimentaire conservé
 LEGS = {"fraiches": "fraîches", "normales": "normales", "lourdes": "lourdes", "douleur": "douleur"}
 
 
@@ -131,12 +130,9 @@ class Store:
         # stock en cuisine : {id, name, qty, added, source, keeps (jours ou None), due (date à vérifier), asked (date)}
         state.setdefault("pantry", [])
         state.setdefault("next_pantry_id", 1)
-        # journal alimentaire : {id, date, time (HH:MM), text, kcal, protein_g, carbs_g, source}
-        state.setdefault("meals", [])
-        state.setdefault("discoveries", [])
-        state.setdefault("profile", {})       # poids, taille, année de naissance, sexe : bilan énergétique   # plat nouveau de la semaine : [{title, date}] (jamais reproposé)
-        state.setdefault("next_meal_id", 1)
-        state.setdefault("meal_checks", {})   # « date créneau » → asked | skipped | answered (question « qu'as-tu mangé ? »)
+        # Journal des repas, profil et questions repas : chez Remy depuis v5.2. Les anciennes clés (meals, profile,
+        # next_meal_id, meal_checks) restent dans le fichier, intactes, comme sauvegarde pour l'import.
+        state.setdefault("discoveries", [])   # plat nouveau de la semaine : [{title, date}] (jamais reproposé)
         for p in state["pantry"]:
             if "id" not in p:
                 p["id"] = state["next_pantry_id"]
@@ -347,6 +343,15 @@ class Store:
             item["closed"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
             self._save()
             return dict(item)
+
+    def reopen_proposal(self, pid: int | str) -> None:
+        """Rouvre une proposition close à tort (l'action n'a pas pu aboutir) : le bouton remarche."""
+        with self._lock:
+            item = self.state["proposals"].get(str(pid))
+            if item and item["status"] != "open":
+                item["status"] = "open"
+                item.pop("closed", None)
+                self._save()
 
     def last_dish_chosen_at(self) -> datetime.datetime | None:
         """Quand l'athlète a choisi pour la dernière fois un plat de /eat (bouton), s'il l'a fait."""
@@ -583,54 +588,6 @@ class Store:
             return dict(item)
 
 
-    # --- journal alimentaire ---------------------------------------------------------
-
-    def log_meal(self, text: str, at: datetime.datetime, source: str = "conversation",
-                 kcal=None, protein_g=None, carbs_g=None, fat_g=None, fiber_g=None, sugars_g=None, salt_g=None,
-                 items: list[dict] | None = None, repeat: bool = False) -> dict:
-        """Repas mangé : texte, aliments pesés (items, nutriments Ciqual) et totaux. Les entrées de plus de MEAL_LOG_DAYS
-        jours sont purgées. repeat : l'athlète a dit avoir remangé le même plat (pas un doublon)."""
-        from .nutrition import meal_of
-        text = " ".join((text or "").split())[:200]
-        if not text:
-            raise ValueError("repas vide")
-
-        def number(v):
-            try:
-                return max(0, round(float(v))) if v not in (None, "") else None
-            except (TypeError, ValueError):
-                return None
-
-        def decimal(v):
-            try:
-                return max(0.0, round(float(v), 1)) if v not in (None, "") else None
-            except (TypeError, ValueError):
-                return None
-        at = at.astimezone(TZ)
-        with self._lock:
-            cutoff = (at.date() - datetime.timedelta(days=MEAL_LOG_DAYS)).isoformat()
-            self.state["meals"] = [m for m in self.state["meals"] if m["date"] >= cutoff]
-            item = {"id": self.state["next_meal_id"], "date": at.date().isoformat(), "time": f"{at:%H:%M}",
-                    "slot": meal_of(at.time()), "text": text, "kcal": number(kcal), "protein_g": number(protein_g),
-                    "carbs_g": number(carbs_g), "fat_g": number(fat_g), "fiber_g": number(fiber_g),
-                    "sugars_g": number(sugars_g), "salt_g": decimal(salt_g), "items": items or [], "source": source,
-                    **({"repeat": True} if repeat else {})}
-            self.state["next_meal_id"] += 1
-            self.state["meals"].append(item)
-            self.state["meals"].sort(key=lambda m: (m["date"], m["time"]))
-            self._save()
-        return dict(item)
-
-    @property
-    def profile(self) -> dict:
-        return dict(self.state["profile"])
-
-    def update_profile(self, **values) -> dict:
-        with self._lock:
-            self.state["profile"].update({k: v for k, v in values.items() if v not in (None, "")})
-            self._save()
-            return dict(self.state["profile"])
-
     @property
     def discoveries(self) -> list[dict]:
         return [dict(d) for d in self.state["discoveries"]]
@@ -639,39 +596,6 @@ class Store:
         with self._lock:
             self.state["discoveries"].append({"title": title, "date": day.isoformat()})
             self.state["discoveries"] = self.state["discoveries"][-104:]   # deux ans de découvertes
-            self._save()
-
-    def similar_meal(self, text: str, at: datetime.datetime) -> dict | None:
-        """Le même plat déjà noté à moins de DUPLICATE_HOURS heures de `at` (doublon probable), ou None."""
-        from .nutrition import DUPLICATE_HOURS, same_dish
-        at = at.astimezone(TZ).replace(tzinfo=None)
-        for m in reversed(self.state["meals"]):
-            when = datetime.datetime.fromisoformat(f"{m['date']}T{m['time']}")
-            if abs(when - at) <= datetime.timedelta(hours=DUPLICATE_HOURS) and same_dish(m["text"], text):
-                return dict(m)
-        return None
-
-    def remove_meal(self, meal_id: int) -> dict | None:
-        with self._lock:
-            item = next((m for m in self.state["meals"] if m["id"] == meal_id), None)
-            if item is None:
-                return None
-            self.state["meals"].remove(item)
-            self._save()
-            return dict(item)
-
-    def meals_since(self, day: datetime.date) -> list[dict]:
-        return [dict(m) for m in self.state["meals"] if m["date"] >= day.isoformat()]
-
-    def meal_check(self, key: str) -> str | None:
-        return self.state["meal_checks"].get(key)
-
-    def set_meal_check(self, key: str, status: str) -> None:
-        with self._lock:
-            checks = self.state["meal_checks"]
-            checks[key] = status
-            for old in sorted(checks)[:-60]:   # garde les plus récents (clés « AAAA-MM-JJ créneau »)
-                checks.pop(old)
             self._save()
 
     # --- ressenti après séance --------------------------------------------------------

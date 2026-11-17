@@ -216,7 +216,7 @@ def tool_propose_meal(args: dict, ledger: Ledger) -> dict:
 
 
 def tool_remove_meal(args: dict, ledger: Ledger) -> dict:
-    item = store.remove_meal(int(args["id"]))
+    item = nutrition.remove_meal(int(args["id"]))
     if item is None:
         raise ValueError(f"aucun repas #{args['id']} dans le journal")
     ledger.record("meal_log", f"retiré : {item['time']} {item['text']}", True)
@@ -228,12 +228,13 @@ def tool_log_meal(args: dict, ledger: Ledger) -> dict:
     if at > cs.now_utc() + datetime.timedelta(minutes=5):
         raise ValueError("repas dans le futur : n'enregistre que ce qui a été mangé")
     again = bool(args.get("again"))
-    if not again and (dup := store.similar_meal(args.get("description", ""), at)):
+    estimate = {k: args.get(k) for k in ("kcal", "protein_g", "carbs_g")}
+    item, dup, unmatched = nutrition.log_meal(args.get("description", ""), at, items=args.get("items"),
+                                              estimate=estimate, repeat=again)
+    if dup:
         raise ValueError(f"déjà noté : #{dup['id']} le {dup['date']} à {dup['time']} « {dup['text']} ». Rien n'a été "
                          "ajouté. Redemander ou relire une recette n'est pas la manger ; seulement si l'athlète dit "
                          "clairement l'avoir remangé, rappelle log_meal avec again=true.")
-    macros, unmatched = meal_nutrients(args)
-    item = store.log_meal(args.get("description", ""), at, **macros, repeat=again)
     ledger.record("meal_log", f"{item['time']} {item['text']}", True)
     result = {"ok": True, "logged": {k: v for k, v in item.items() if k != "items"},
               "items": [f"{i['grams']} g {i['ciqual']}" for i in item["items"]]}
@@ -748,7 +749,14 @@ def tool_set_profile(args: dict, ledger: Ledger) -> dict:
                 raise ValueError(f"{key} hors limites ({lo}-{hi}{' ' + unit if unit else ''}) : vérifie avec l'athlète")
     if values["sex"] not in (None, "") and str(values["sex"]).strip().lower() not in ("homme", "femme"):
         raise ValueError("sex : « homme » ou « femme »")
-    profile = store.update_profile(**values)
+    if values["birth_year"] not in (None, ""):
+        values["birth_year"] = int(float(values["birth_year"]))
+    for key in ("weight_kg", "height_cm"):
+        if values[key] not in (None, ""):
+            values[key] = float(values[key])
+    if values["sex"] not in (None, ""):
+        values["sex"] = str(values["sex"]).strip().lower()
+    profile = nutrition.update_profile(**values)
     ledger.record("profile", ", ".join(f"{k}={v}" for k, v in values.items() if v not in (None, "")), True)
     return {"ok": True, "profile": profile}
 
