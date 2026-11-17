@@ -39,6 +39,15 @@ jobs:
           for port in 18001 18002; do
             timeout 90 sh -c "until curl -fs http://127.0.0.1:$port/health >/dev/null; do sleep 2; done"
           done
+      # Dora n'a pas d'image publiée : construite depuis le tag de docker-compose.yml. Sans BRouter (1,5 Go de tuiles) :
+      # on vérifie le contrat (santé, validation, « BRouter injoignable ») ; le tracé est testé dans le dépôt de Dora.
+      - name: Start Dora at the version of docker-compose.yml, without BRouter
+        run: |
+          build=$(uv run --frozen python -c "import yaml; print(yaml.safe_load(open('docker-compose.yml'))['services']['dora']['build'])")
+          docker build -q -t dora-ci "$build"
+          docker run -d --name dora -p 18003:8000 -e BROUTER_URL=http://127.0.0.1:9/brouter dora-ci
+          timeout 90 sh -c 'until curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:18003/health | grep -qE "200|503"; do sleep 2; done'
+          echo "DORA_URL=http://127.0.0.1:18003" >> "$GITHUB_ENV"
       - name: Create Bob's accounts and API keys
         run: |
           remy_key=$(docker exec remy remy user create athlete --timezone Europe/Paris --lang fr --label bob \
@@ -53,4 +62,4 @@ jobs:
         run: BOB_LIVE_SERVICES=1 uv run --frozen python -m pytest -q tests/test_services_live.py
       - name: Service logs
         if: failure()
-        run: docker logs remy; docker logs emile
+        run: docker logs remy; docker logs emile; docker logs dora

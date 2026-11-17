@@ -15,6 +15,7 @@ from .bot import BOT_NAME, build_bot
 from .commands import BOT_COMMANDS
 from .config import UTC, settings
 from .services import STATUS, ServiceError
+from .services import dora as dora_service
 from .services import emile as emile_service
 from .services import remy as remy_service
 
@@ -23,7 +24,7 @@ logging.getLogger("httpx").setLevel(logging.WARNING)   # sinon une ligne par lon
 logger = logging.getLogger("bob")
 
 
-SERVICES = (remy_service, emile_service)   # services voisins du même stack
+SERVICES = (remy_service, emile_service, dora_service)   # services voisins du même stack
 
 
 def services_health() -> dict[str, dict[str, object]]:

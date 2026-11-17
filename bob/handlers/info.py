@@ -1,5 +1,6 @@
 """Commandes instantanées ou simples : aide, mémoire, objectifs, agenda, forme, météo, nutrition, boucles, mème."""
 import asyncio
+import base64
 import dataclasses
 import datetime
 import logging
@@ -8,11 +9,13 @@ from types import SimpleNamespace
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InputMediaDocument, InputMediaPhoto, Update
 from telegram.ext import ContextTypes
 
-from .. import agent, commands, dreeve, nutrition, routes, weather
+from .. import agent, commands, dreeve, nutrition, weather
 from .. import calendar_store as cs
 from ..config import TZ, settings
 from ..formatting import md_escape
 from ..memory import store
+from ..services import NotFound
+from ..services import dora
 from .ui import send_text
 from ..i18n import _, decimal
 
@@ -20,6 +23,8 @@ logger = logging.getLogger(__name__)
 
 ROUTE_KM_CHOICES = (5, 8, 10, 12, 15)
 SURFACE_LABELS = {"route": _("🛣️ Route"), "nature": _("🌲 Nature"), "mixte": _("🔀 Mixte")}
+SURFACES = {"route": "paved", "nature": "unpaved", "mixte": "mixed"}   # mots de Bob → surface de Dora
+NEVER_DONE_MIN = 0.8   # « jamais faite » : au moins 80 % hors des anciens tracés (sinon Dora renvoie la plus nouvelle)
 
 
 class InfoMixin:
@@ -124,7 +129,7 @@ class InfoMixin:
             await query.answer(_("Demande expirée, relance /newroute"))
             return
         await query.answer()
-        if kind == "s" and value in routes.SURFACES:
+        if kind == "s" and value in SURFACES:
             ask.surface = value
             label = SURFACE_LABELS[value]
         else:
@@ -137,44 +142,45 @@ class InfoMixin:
         await self._route_flow(query.message, ask, never_done=True, filled=True)
 
     async def _send_routes(self, message, ask: "commands.RouteAsk", never_done: bool) -> None:
-        """Boucles autour du lieu demandé : un album de cartes, puis un album de fichiers GPX."""
+        """Boucles autour du lieu demandé, tracées par Dora : un album de cartes, puis un album de fichiers GPX."""
         typing = asyncio.create_task(self._keep_typing(SimpleNamespace(effective_chat=message.chat)))
-        loops, maps = [], []
+        home = settings.weather_locations[0]
+        name = home[0]
+        km = ask.km if ask.km is not None else commands.DEFAULT_ROUTE_KM
+        surface = ask.surface or "mixte"
+        request = {"distance_km": km, "count": 1 if never_done else 3, "surface": SURFACES[surface],
+                   "never_done": never_done, "lang": settings.language}
+        if ask.place:
+            name, request["start"] = ask.place[0], {"lat": ask.place[1], "lon": ask.place[2]}
+        elif ask.query:   # Dora trouve le lieu, de préférence près de chez l'athlète
+            request["place"], request["near"] = ask.query, {"lat": home[1], "lon": home[2]}
+        else:
+            request["start"] = {"lat": home[1], "lon": home[2]}
         try:
-            name, start = None, None
-            if ask.place:
-                name, start = ask.place[0], (ask.place[1], ask.place[2])
-            elif ask.query:
-                home = settings.weather_locations[0]
-                try:
-                    hit = await asyncio.to_thread(routes.geocode, ask.query, (home[1], home[2]))
-                except Exception as e:
-                    logger.warning(f"Géocodage de « {ask.query} » impossible : {e}")
-                    hit = None
-                if hit is None:
-                    await self._push(_("Je trouve pas « {place} » sur la carte 🤔 Essaie avec la ville, "
-                                       "genre « bois de vincennes paris »").format(place=ask.query))
-                    return
-                name, start = hit[0], (hit[1], hit[2])
-            else:
-                home = settings.weather_locations[0]
-                name, start = home[0], (home[1], home[2])
-            km = ask.km if ask.km is not None else commands.DEFAULT_ROUTE_KM
             runs = await asyncio.to_thread(dreeve.get_all_runs) if never_done and settings.dreeve_enabled else []
-            loops = await asyncio.to_thread(routes.find_loops, start, km, 1 if never_done else 3, runs, never_done,
-                                            ask.surface or "mixte")
-            maps = [await asyncio.to_thread(routes.to_map_png, lp, start) for lp in loops]
+            request["avoid_tracks"] = [r["encodedPolyline"] for r in runs if r.get("encodedPolyline")]
+
+            def find():
+                with dora.calls():
+                    return dora.client().find_loops(include=("gpx", "png"), **request)
+            result = await asyncio.to_thread(find)
+        except NotFound:
+            await self._push(_("Je trouve pas « {place} » sur la carte 🤔 Essaie avec la ville, "
+                               "genre « bois de vincennes paris »").format(place=ask.query))
+            return
         except Exception:
             logger.exception("Boucles en échec")
-            loops = []
+            result = None
         finally:
             typing.cancel()
+        loops = result.loops if result else []
         if not loops:
             await self._push(_("J'ai pas réussi à tracer de boucle là, réessaie dans un moment 🥲"))
             return
-        surface = ask.surface or "mixte"
+        if result.place:
+            name = result.place.name
         kind = {"route": _(" sur route"), "nature": _(" nature"), "mixte": ""}[surface]
-        if never_done and loops[0].novelty is not None and loops[0].novelty < routes.NEVER_DONE_MIN:
+        if never_done and loops[0].novelty is not None and loops[0].novelty < NEVER_DONE_MIN:
             intro = _("Pas trouvé de boucle{kind} 100 % inédite vers {place}, voilà la plus nouvelle 👇").format(kind=kind, place=name)
         else:
             intro = (_("Une boucle{kind} jamais faite depuis {place} 👀").format(kind=kind, place=name) if never_done
@@ -183,19 +189,17 @@ class InfoMixin:
         if ask.session:   # distance et lieu tirés de l'agenda : on dit de quelle séance
             intro = commands.session_line(ask.session) + "\n" + intro
         await self._push(intro)
-        photos = [InputMediaPhoto(img, caption=f"{i}. {routes.describe(lp, surface)}" + (" · © OpenStreetMap" if i == 1 else ""))
-                  for i, (lp, img) in enumerate(zip(loops, maps), 1)]
-        gpx = [(routes.to_gpx(lp, _("Boucle {n} · {km} km · {place}").format(n=i, km=decimal(f"{lp.km:.1f}"), place=name)),
-                _("boucle-{n}-{km}km.gpx").format(n=i, km=decimal(f"{lp.km:.1f}")))
+        maps = [base64.b64decode(lp.png_base64) for lp in loops]
+        captions = [f"{i}. {lp.caption}" + (" · © OpenStreetMap" if i == 1 else "") for i, lp in enumerate(loops, 1)]
+        gpx = [(base64.b64decode(lp.gpx_base64), _("boucle-{n}-{km}km.gpx").format(n=i, km=decimal(f"{lp.distance_km:.1f}")))
                for i, lp in enumerate(loops, 1)]
-        docs = [InputMediaDocument(data, filename=filename) for data, filename in gpx]
         try:
-            if len(photos) == 1:
-                await message.reply_photo(maps[0], caption=photos[0].caption)
+            if len(loops) == 1:
+                await message.reply_photo(maps[0], caption=captions[0])
                 await message.reply_document(gpx[0][0], filename=gpx[0][1])   # InputMediaDocument n'expose pas filename
             else:
-                await message.reply_media_group(photos)
-                await message.reply_media_group(docs)
+                await message.reply_media_group([InputMediaPhoto(img, caption=c) for img, c in zip(maps, captions)])
+                await message.reply_media_group([InputMediaDocument(data, filename=f) for data, f in gpx])
         except Exception:
             logger.exception("Envoi des boucles en échec")
             await self._push(_("Les boucles sont prêtes mais Telegram n'a pas voulu les prendre 🥲 Réessaie ?"))
