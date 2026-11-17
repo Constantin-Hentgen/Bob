@@ -125,8 +125,8 @@ services:
   # Boucles de course : tracé, « jamais faite », carte et GPX (https://github.com/Constantin-Hentgen/Dora).
   # Pas d'image publiée : construit depuis le tag Git (même version que le client dans pyproject.toml).
   # Premier démarrage : `segments` télécharge les tuiles BRouter (~1,5 Go pour la France), puis `brouter`, puis `dora`.
-  # Disque : ~2 Go ; mémoire : ~1,5 Go de plus. Données cartographiques à rafraîchir chaque mois : recréer `segments`
-  # puis redémarrer `brouter` (wiki de Dora, « Self-hosting »).
+  # Disque : ~2 Go ; mémoire : ~1,5 Go de plus. Données cartographiques à rafraîchir chaque mois : redémarrer
+  # `dora-segments` (il ne retélécharge que les tuiles changées) puis `brouter` (wiki de Dora, « Self-hosting »).
   dora: &dora
     build: https://github.com/Constantin-Hentgen/Dora.git#v0.6.0
     image: dora:0.6.0
@@ -156,13 +156,22 @@ services:
       - dora-segments:/segments4:ro
     depends_on:
       segments:
-        condition: service_completed_successfully
+        condition: service_healthy
 
-  segments:   # une fois : télécharge les tuiles BRouter, puis s'arrête
+  # Télécharge (ou rafraîchit) les tuiles BRouter, puis reste en veille : « healthy » une fois les tuiles là, pour que
+  # le stack reste au vert (un conteneur « exited » s'affiche en rouge dans Portainer). Enveloppe à retirer quand
+  # Dora aura son propre mode (https://github.com/Constantin-Hentgen/Dora/issues/66).
+  segments:
     <<: *dora
     container_name: dora-segments
-    command: ["dora-segments", "--ok-if-present"]
-    restart: "no"
+    command: ["sh", "-c", "rm -f /tmp/ready && dora-segments --ok-if-present && touch /tmp/ready && exec sleep infinity"]
+    restart: unless-stopped
+    healthcheck:   # remplace celui de l'image (l'API de Dora, qui ne tourne pas ici)
+      test: ["CMD", "test", "-f", "/tmp/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 1h   # premier téléchargement : quelques minutes
     depends_on: []
     volumes:
       - dora-segments:/segments4

@@ -107,7 +107,9 @@ def test_dora_and_its_router_are_built_from_the_client_version_and_stay_private(
     version = re.search(r"/v([\d.]+)\.tar\.gz$", sources["dora-routes"]["url"]).group(1)
     assert compose["dora"]["build"].endswith(f"#v{version}") and compose["dora"]["image"] == f"dora:{version}"
     assert compose["brouter"]["build"]["context"].endswith(f"#v{version}")
-    assert compose["segments"]["command"] == ["dora-segments", "--ok-if-present"]
+    segments = compose["segments"]   # télécharge puis reste « healthy » : le stack reste au vert
+    assert "dora-segments --ok-if-present" in segments["command"][-1] and segments["healthcheck"]["test"][-1] == "/tmp/ready"
+    assert compose["brouter"]["depends_on"]["segments"]["condition"] == "service_healthy"
     for name in ("dora", "brouter"):   # construites, jamais tirées : sinon « re-pull » de Portainer échoue
         assert compose[name]["pull_policy"] == "build"
     for name in ("dora", "brouter", "segments"):
