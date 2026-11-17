@@ -8,7 +8,6 @@
 """
 import datetime
 import logging
-import re
 import threading
 import uuid
 
@@ -17,7 +16,6 @@ from caldav.lib.error import NotFoundError
 from icalendar import Calendar, Event
 
 from .config import DAYS, TZ, UTC, settings
-from .i18n import _
 
 logger = logging.getLogger(__name__)
 
@@ -264,133 +262,3 @@ def delete_event(uid: str) -> dict:
     except LookupError:
         return {"uid": uid, "summary": summary, "start": start, "end": end}
     raise RuntimeError("l'événement est toujours présent sur le serveur CalDAV après suppression")
-
-
-# ---------------------------------------------------------------------------
-# Liste de courses : UN événement, à l'heure voulue, dans l'agenda courses dédié (CALDAV_SHOPPING_URL),
-# avec la checklist par rayon dans la description (visible dans n'importe quelle app de calendrier).
-# ---------------------------------------------------------------------------
-
-SHOPPING_UID_SUFFIX = "@running-coach-shopping"   # ancien nom du projet, gardé : il retrouve les listes déjà écrites
-
-
-def get_shopping_calendar():
-    """Comme get_calendar : un client par thread."""
-    if getattr(_local, "shopping", None) is None:
-        client = caldav.DAVClient(url=settings.caldav_shopping_url, username=settings.caldav_user,
-                                  password=settings.caldav_pass)
-        _local.shopping = client.calendar(url=settings.caldav_shopping_url)
-    return _local.shopping
-
-
-def item_label(item: dict) -> str:
-    return item["name"] + (f" — {item['qty']}" if item.get("qty") else "")
-
-
-def group_by_aisle(items: list[dict]) -> dict[str, list[tuple[int, dict]]]:
-    """Rayon → [(index, article)], dans l'ordre d'apparition des rayons."""
-    groups: dict[str, list[tuple[int, dict]]] = {}
-    for i, item in enumerate(items):
-        groups.setdefault(item.get("aisle") or _("🛒 Divers"), []).append((i, item))
-    return groups
-
-
-def format_cost(lst: dict) -> str | None:
-    lo, hi = lst.get("cost_min"), lst.get("cost_max")
-    if lo is None and hi is None:
-        return None
-    if lo is None or hi is None or round(lo) == round(hi):
-        return f"~{round(lo if lo is not None else hi)} €"
-    return f"{round(lo)}–{round(hi)} €"
-
-
-def shopping_summary_line(lst: dict) -> str:
-    """« 7 jours · ~55–70 € » : ce que couvre la liste et son coût estimé."""
-    parts = []
-    if lst.get("days"):
-        parts.append(f"{lst['days']} jour{'s' if lst['days'] > 1 else ''}")
-    if cost := format_cost(lst):
-        parts.append(f"{cost} estimés")
-    return " · ".join(parts)
-
-
-def plain_text(markdown: str) -> str:
-    """Retire le balisage Telegram (*gras*, _italique_, `code`, échappements) pour une description d'agenda."""
-    return re.sub(r"\\([_*`\[])", r"\1", re.sub(r"(?<!\\)[*_`]", "", markdown)).strip()
-
-
-def shopping_description(lst: dict) -> str:
-    """Description de l'événement courses : couverture, coût estimé, checklist, puis les recettes si générées."""
-    head = []
-    if lst.get("days") or lst.get("coverage"):
-        head.append("Couvre : " + ", ".join(x for x in (lst.get("days") and f"{lst['days']} jours", lst.get("coverage")) if x))
-    if cost := format_cost(lst):
-        head.append(f"Coût estimé : {cost}")
-    if not lst.get("recipes"):
-        head.append("Recettes : /recipes dans Telegram")
-    text = "\n".join(head) + "\n\n" + format_checklist(lst["items"])
-    if lst.get("recipes"):
-        text += "\n\n🍳 RECETTES\n\n" + plain_text(lst["recipes"])
-    return text
-
-
-def format_checklist(items: list[dict]) -> str:
-    """Articles {name, qty, aisle, done} → checklist texte par rayon (✅ acheté, ☐ à acheter)."""
-    return "\n\n".join(
-        f"{aisle}\n" + "\n".join(f"{'✅' if item.get('done') else '☐'} {item_label(item)}" for __, item in entries)
-        for aisle, entries in group_by_aisle(items).items())
-
-
-def _coach_shopping_items(now: datetime.datetime) -> list:
-    """Ce que le coach a déjà créé et qu'une nouvelle liste remplace : ses événements courses à venir
-    (les passés restent, c'est l'historique) et les anciennes tâches (ancienne version de la liste)."""
-    found = []
-    shopping = get_shopping_calendar()
-    for obj in [*shopping.events(), *shopping.todos(include_completed=True)]:
-        try:
-            comp = next(c for c in Calendar.from_ical(obj.data).walk() if c.name in ("VEVENT", "VTODO"))
-        except Exception:
-            continue
-        if not str(comp.get("UID", "")).endswith(SHOPPING_UID_SUFFIX):
-            continue
-        if comp.name == "VTODO" or event_bounds(comp)[1] > now:
-            found.append(obj)
-    return found
-
-
-def save_shopping_event(lst: dict, start: datetime.datetime, end: datetime.datetime) -> dict:
-    """Crée l'événement courses (relu sur le serveur) et retire la précédente liste à venir du coach.
-    Les événements et tâches que tu crées toi-même dans cet agenda ne sont jamais touchés."""
-    items = lst["items"]
-    if not items:
-        raise ValueError("liste vide")
-    if end <= start:
-        raise ValueError("l'heure de fin doit être après l'heure de début")
-    now = now_utc()
-    if end < now:
-        raise ValueError("créneau dans le passé : refusé")
-    previous = _coach_shopping_items(now)
-    uid = f"{uuid.uuid4()}{SHOPPING_UID_SUFFIX}"
-    details = ", ".join(x for x in (f"{len(items)} articles", shopping_summary_line(lst)) if x)
-    summary = f"🛒 Courses ({details})"
-    get_shopping_calendar().add_event(build_event(uid, summary, start, end, shopping_description(lst)))
-    try:   # relecture : l'événement doit exister avec le bon créneau avant de supprimer l'ancienne liste
-        __, comp = parse_vevent(get_shopping_calendar().get_event_by_uid(uid).data)
-    except Exception as e:
-        raise RuntimeError(f"relecture impossible après création : {e}") from None
-    c_start, c_end = event_bounds(comp)
-    if not (_close(c_start, start) and _close(c_end, end)):
-        raise RuntimeError("relecture : le créneau enregistré ne correspond pas")
-    for obj in previous:
-        obj.delete()
-    return {"uid": uid, "summary": summary, "start": c_start, "end": c_end, "replaced": len(previous)}
-
-
-def set_shopping_description(uid: str, description: str) -> None:
-    """Met à jour la checklist (articles cochés) dans la description de l'événement courses ; relu sur le serveur."""
-    obj = get_shopping_calendar().get_event_by_uid(uid)
-    obj.data = apply_update(obj.data, description=description)
-    obj.save()
-    __, comp = parse_vevent(get_shopping_calendar().get_event_by_uid(uid).data)
-    if _text(comp, "DESCRIPTION") != description:
-        raise RuntimeError("relecture : la checklist n'a pas été mise à jour sur le serveur CalDAV")

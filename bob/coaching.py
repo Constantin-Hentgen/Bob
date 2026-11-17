@@ -3,7 +3,7 @@ résumé des ressentis après séance, bilan prévu / réalisé de la semaine.""
 import datetime
 import re
 
-from .config import DAYS, TZ
+from .config import DAYS
 from .dreeve import distance_km, format_activity
 from .memory import LEGS, format_goal, sorted_goals
 from .i18n import _
@@ -86,81 +86,6 @@ def checkins_context(checkins: list[dict]) -> str:
         lines.append(f"Échelle du ressenti : {FEEL_SCALE}.")
         lines.append(f"Charge perçue (somme (10 − ressenti) × minutes) sur la période : {srpe:.0f}")
     return "\n".join(lines)
-
-
-# ---------------------------------------------------------------------------
-# Liste de courses en cours
-# ---------------------------------------------------------------------------
-
-def shopping_context(lst: dict | None) -> str:
-    if lst is None:
-        return "aucune"
-    done = sum(i["done"] for i in lst["items"])
-    meta = [f"{len(lst['items'])} articles, {done} achetés"]
-    if lst.get("days"):
-        meta.append(f"couvre {lst['days']} jours")
-    if lst.get("event_start"):
-        start = datetime.datetime.fromisoformat(lst["event_start"]).astimezone(TZ)
-        meta.append(f"dans l'agenda courses le {_day(start.date())} {start:%H:%M}")
-    lines = [f"({', '.join(meta)}) — ✅ = acheté :"]
-    lines += [f"- {'✅' if i['done'] else '☐'} {i['name']}" + (f" ({i['qty']})" if i.get("qty") else "")
-              + (f" [{i['aisle']}]" if i.get("aisle") else "") for i in lst["items"]]
-    return "\n".join(lines)
-
-
-# ---------------------------------------------------------------------------
-# Stock en cuisine
-# ---------------------------------------------------------------------------
-
-def pantry_context(pantry: list[dict], today: datetime.date, compact: bool = False) -> str:
-    """compact : version /stock (« · il y a 3 j » au lieu de « — acheté il y a 3 j »)."""
-    if not pantry:
-        return "vide ou inconnu (demande à l'athlète ce qu'il a s'il faut cuisiner)"
-    lines = []
-    for p in sorted(pantry, key=lambda p: p.get("added") or ""):
-        age = ""
-        if p.get("added"):
-            days = (today - datetime.date.fromisoformat(p["added"])).days
-            if compact:
-                age = _(" · aujourd'hui") if days == 0 else _(" · il y a {days} j").format(days=days)
-            else:
-                age = _(" — acheté aujourd'hui") if days == 0 else _(" — acheté il y a {days} j").format(days=days)
-        lines.append(f"- {p['name']}" + (f" ({p['qty']})" if p.get("qty") else "") + age + _due_label(p, today))
-    return "\n".join(lines)
-
-
-def box_count(qty) -> int:
-    """« 2 boîtes » → 2 ; sans nombre lisible → 1."""
-    m = re.match(r"\s*(\d+)", str(qty or ""))
-    return int(m.group(1)) if m else 1
-
-
-def boxes_in_use(pantry: list[dict]) -> list[tuple[str, int]]:
-    """Plats cuisinés en boîtes encore au stock : [(nom, nombre de boîtes)]."""
-    return [(p["name"], box_count(p.get("qty"))) for p in pantry if p.get("boxes")]
-
-
-def boxes_context(pantry: list[dict], total: int) -> str:
-    used = boxes_in_use(pantry)
-    n = sum(k for __, k in used)
-    detail = f" ({', '.join(f'{name} ×{k}' for name, k in used)})" if used else ""
-    return f"{n}/{total} occupées{detail} → {max(0, total - n)} libre(s)"
-
-
-def _due_label(p: dict, today: datetime.date) -> str:
-    if not p.get("due"):
-        return ""
-    due = datetime.date.fromisoformat(p["due"])
-    if p.get("asked"):
-        return _(" — à vérifier (« encore là ? » envoyé)")
-    if due < today:
-        return _(" — date dépassée")
-    return _(" — à consommer aujourd'hui") if due == today else _(" — se garde jusqu'au {day}").format(day=_day(due))
-
-
-def format_pantry(pantry: list[dict], today: datetime.date) -> str:
-    """Réponse de /stock (texte brut, à échapper par l'appelant)."""
-    return pantry_context(pantry, today, compact=True)
 
 
 # ---------------------------------------------------------------------------

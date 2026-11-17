@@ -14,6 +14,7 @@ from . import agent, commands, dreeve, voice  # noqa: F401  (dreeve : réexport�
 from . import calendar_store as cs  # noqa: F401  (réexporté)
 from .config import TZ, settings  # noqa: F401  (TZ : réexporté)
 from .memory import store
+from .services import ServiceError
 from .handlers.info import InfoMixin
 from .handlers.jobs import JobsMixin
 from .handlers.kitchen import KitchenMixin
@@ -50,7 +51,6 @@ class CoachBot(InfoMixin, KitchenMixin, MealsMixin, RunsMixin, JobsMixin):
         self.app = app
         self.chat_id = settings.telegram_chat_id
         self._activity_lock = asyncio.Lock()   # jamais deux détections en parallèle (pas de double débrief)
-        self._shopping_sync_lock = asyncio.Lock()   # écritures de la checklist dans l'agenda courses, une à la fois
         self._background: set[asyncio.Task] = set()
         self._pending: list[str] = []          # messages reçus pas encore envoyés au coach
         self._pending_update: Update | None = None
@@ -81,8 +81,16 @@ class CoachBot(InfoMixin, KitchenMixin, MealsMixin, RunsMixin, JobsMixin):
             await self._send_gif(reply.gif, update)
         for pid, summary in reply.proposals:
             await send_text(self._sender(update), proposal_bubble(summary), proposal_markup(pid))
-        if reply.shopping_list is not None and (lst := store.shopping_list) and lst["id"] == reply.shopping_list:
-            await send_text(self._sender(update), shopping_text(lst), shopping_markup(lst))
+        if reply.shopping_list is not None:
+            try:
+                lst = await asyncio.to_thread(self._current_list)
+            except ServiceError as e:
+                logger.error(f"Checklist non affichée : {e}")
+                await send_text(self._sender(update), _("🛒 La liste est enregistrée, mais je n'arrive pas à l'afficher pour "
+                                                        "l'instant : /list la montrera dans un moment."))
+            else:
+                if lst is not None and lst.id == reply.shopping_list:
+                    await send_text(self._sender(update), shopping_text(lst), shopping_markup(lst))
 
     def _typing(self, update: Update | None = None):
         """Coroutine qui affiche « écrit… » dans le chat (le temps de la pause entre deux messages)."""
