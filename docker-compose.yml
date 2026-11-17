@@ -130,6 +130,7 @@ services:
   dora: &dora
     build: https://github.com/Constantin-Hentgen/Dora.git#v0.6.0
     image: dora:0.6.0
+    pull_policy: build   # image construite, jamais tirée : « re-pull » de Portainer ne doit pas la chercher en ligne
     container_name: dora
     restart: unless-stopped
     environment:
@@ -145,6 +146,7 @@ services:
       args:
         BROUTER_IMAGE: ghcr.io/abrensch/brouter@sha256:fbc2a0e47e655fb20ab0005c9f5fbc60e6e45e0997092713c1b996bc7cf01711
     image: dora-brouter:0.6.0
+    pull_policy: build
     container_name: brouter
     restart: unless-stopped
     environment:

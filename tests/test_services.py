@@ -108,6 +108,8 @@ def test_dora_and_its_router_are_built_from_the_client_version_and_stay_private(
     assert compose["dora"]["build"].endswith(f"#v{version}") and compose["dora"]["image"] == f"dora:{version}"
     assert compose["brouter"]["build"]["context"].endswith(f"#v{version}")
     assert compose["segments"]["command"] == ["dora-segments", "--ok-if-present"]
+    for name in ("dora", "brouter"):   # construites, jamais tirées : sinon « re-pull » de Portainer échoue
+        assert compose[name]["pull_policy"] == "build"
     for name in ("dora", "brouter", "segments"):
         assert "ports" not in compose[name], f"{name} ne doit pas être publié sur l'hôte"
     assert "dora" in compose["bob"]["depends_on"]
