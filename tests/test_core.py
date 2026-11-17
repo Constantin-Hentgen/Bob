@@ -243,35 +243,3 @@ class FakeShoppingCalendar:
 
     def get_event_by_uid(self, uid):
         return next(o for o in self.objs if f"UID:{uid}" in o.data)
-
-
-def test_shopping_event_replaces_only_coachs_upcoming_list(monkeypatch):
-    fake = FakeShoppingCalendar()
-    monkeypatch.setattr(cs, "get_shopping_calendar", lambda: fake)
-    now = cs.now_utc()
-    later, earlier = now + datetime.timedelta(days=1), now - datetime.timedelta(days=3)
-    hour = datetime.timedelta(hours=1)
-    fake.add(cs.build_event("mine@phone", "Marché", later, later + hour, "à moi"))                       # à l'athlète
-    fake.add(cs.build_event("old@running-coach-shopping", "🛒 Courses", earlier, earlier + hour, "x"))  # passé : gardé
-    fake.add(cs.build_event("next@running-coach-shopping", "🛒 Courses", later, later + hour, "x"))     # à venir : remplacé
-    fake.add("BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VTODO\nUID:t@running-coach-shopping\nSUMMARY:Bananes\nEND:VTODO\nEND:VCALENDAR\n")
-
-    start = now + datetime.timedelta(hours=3)
-    items = [{"name": "Bananes", "qty": "7", "aisle": "🥦 Fruits et légumes"}, {"name": "Riz", "qty": "500 g", "aisle": "🍚 Féculents"},
-             {"name": "Pommes", "aisle": "🥦 Fruits et légumes", "done": True}]
-    lst = {"items": items, "days": 7, "coverage": "déjeuners et dîners", "cost_min": 54.6, "cost_max": 70}
-    r = cs.save_shopping_event(lst, start, start + datetime.timedelta(minutes=30))
-    assert r["replaced"] == 2 and r["summary"] == "🛒 Courses (3 articles, 7 jours · 55–70 € estimés)"
-    uids = {next(line for line in o.data.splitlines() if line.startswith("UID:")) for o in fake.objs}
-    assert uids == {"UID:mine@phone", "UID:old@running-coach-shopping", f"UID:{r['uid']}"}
-    _, comp = cs.parse_vevent(fake.get_event_by_uid(r["uid"]).data)
-    assert str(comp["DESCRIPTION"]) == ("Couvre : 7 jours, déjeuners et dîners\nCoût estimé : 55–70 €\nRecettes : /recipes dans Telegram"
-                                        "\n\n🥦 Fruits et légumes\n☐ Bananes — 7\n✅ Pommes\n\n🍚 Féculents\n☐ Riz — 500 g")
-    with pytest.raises(ValueError):
-        cs.save_shopping_event(lst, earlier, earlier + hour)   # passé refusé
-
-
-def test_shopping_summary_and_cost_formats():
-    assert cs.shopping_summary_line({"days": 7, "cost_min": 55, "cost_max": 70}) == "7 jours · 55–70 € estimés"
-    assert cs.shopping_summary_line({"days": 1, "cost_min": 12.4, "cost_max": None}) == "1 jour · ~12 € estimés"
-    assert cs.shopping_summary_line({"days": None, "cost_min": None, "cost_max": None}) == ""

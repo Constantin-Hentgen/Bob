@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from . import calendar_store as cs
 from . import coaching, dreeve, dreeve_mcp, llm, nutrition, weather
 from .services import ServiceError
+from .services import emile
 from .config import DAYS_LONG, TZ, TZ_LABEL, UTC, settings
 from .i18n import _, language_name
 from .memory import store
@@ -362,6 +363,20 @@ def _nutrition_context(runs: list[dict], now: datetime.datetime) -> tuple[str, s
             coaching.meal_variety(meals, today), coaching.discovery_context(store.discoveries, week, today))
 
 
+def _kitchen_context() -> tuple[str, str, str]:
+    """Stock, boîtes repas et liste de courses en cours, en texte prêt pour le modèle, lus chez Emile. Emile injoignable :
+    le coach le sait et ne prétend rien enregistrer."""
+    try:
+        with emile.calls():
+            kitchen = emile.client()
+            return kitchen.stock_text("prompt"), kitchen.stock_text("boxes"), kitchen.list_text("prompt")
+    except ServiceError as e:
+        logger.error(f"Cuisine indisponible : {e}")
+        off = (f"INDISPONIBLE ({e.service} ne répond pas : {e.detail}). Ni le stock ni la liste de courses ne peuvent "
+               "être lus ou modifiés pour l'instant : dis-le simplement si on t'en parle.")
+        return off, off, off
+
+
 async def _gather_context() -> str:
     today = datetime.datetime.now(TZ).replace(hour=0, minute=0, second=0, microsecond=0).astimezone(UTC)
     forecast, cal_result, dreeve_ctx = await asyncio.gather(
@@ -393,18 +408,19 @@ async def _gather_context() -> str:
 
     now = datetime.datetime.now(TZ)
     meals_text, energy_text, variety_text, discovery_text = await asyncio.to_thread(_nutrition_context, all_runs, now)
+    stock_text, boxes_text, shopping_text = await asyncio.to_thread(_kitchen_context)
     return (
         "DONNÉES EN TEMPS RÉEL DU SYSTÈME :\n"
         f"- Date et heure actuelles : {DAYS_LONG[now.weekday()]} {now:%d/%m/%Y %H:%M} ({TZ_LABEL})\n"
         f"- Objectifs (compte à rebours) :\n{coaching.goals_context(store.goals, now.date())}\n"
         f"- Ressentis après séance (14 derniers jours) :\n{coaching.checkins_context(store.recent_checkins(14, now.date()))}\n"
-        f"- Stock en cuisine :\n{coaching.pantry_context(store.pantry, now.date())}\n"
-        f"- Boîtes repas (tups) : {coaching.boxes_context(store.pantry, settings.meal_boxes)}\n"
+        f"- Stock en cuisine :\n{stock_text}\n"
+        f"- Boîtes repas (tups) : {boxes_text}\n"
         f"- Repas notés :\n{meals_text}\n"
         f"- Bilan nutritionnel (calculé par le système, table Ciqual) :\n{energy_text}\n"
         f"- Variété des repas : {variety_text}\n"
         f"- Plat découverte de la semaine : {discovery_text}\n"
-        f"- Liste de courses en cours {coaching.shopping_context(store.shopping_list)}\n"
+        f"- Liste de courses en cours {shopping_text}\n"
         f"- Prévisions météo :{forecast}\n"
         + (f"- Échange : {'ce message OUVRE une nouvelle session' if store.session_opening() else 'session en cours'} ; "
            f"GIF : {'possible, seulement pour ouvrir ou clôturer l’échange, et seulement s’il illustre vraiment ton message' if store.gif_available() else 'déjà envoyé dans cette session, plus de GIF'}\n"

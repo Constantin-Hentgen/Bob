@@ -4,14 +4,16 @@ import re
 from dataclasses import dataclass
 from itertools import groupby
 
+from emile.core.models import ShoppingList
 from telegram import BotCommand
 
 from . import nutrition
-from .coaching import format_goals, format_pantry
+from .coaching import format_goals
 from .config import DAYS, DAYS_LONG, TZ, settings
 from .dreeve import format_activity, weekly_volume
 from .formatting import md_escape
 from .i18n import _, decimal, plural
+from .services import emile
 
 AGENDA_DEFAULT_DAYS = 7
 AGENDA_MAX_DAYS = 45
@@ -370,10 +372,10 @@ NEW_DISH_PROMPT = (
 )
 
 
-def recipes_prompt(lst: dict) -> str:
+def recipes_prompt(lst: ShoppingList) -> str:
     """Recettes tirées de la liste de courses en cours."""
-    items = "\n".join(f"- {i['name']}" + (f" ({i['qty']})" if i.get("qty") else "") for i in lst["items"])
-    covers = ", ".join(x for x in (lst.get("days") and f"{lst['days']} jours", lst.get("coverage")) if x) or "la période prévue"
+    items = "\n".join(f"- {i.name}" + (f" ({i.qty})" if i.qty else "") for i in lst.items)
+    covers = ", ".join(x for x in (lst.days and f"{lst.days} jours", lst.coverage) if x) or "la période prévue"
     return (
         f"Propose les recettes de ma liste de courses actuelle (elle couvre : {covers}) :\n{items}\n\n"
         "Contraintes : faciles (30 min actives max), efficaces (cuisiner en batch pour remplir mes boîtes libres, voir "
@@ -398,11 +400,14 @@ def recipes_prompt(lst: dict) -> str:
     )
 
 
-def format_stock_reply(pantry: list[dict], today: datetime.date) -> str:
-    if not pantry:
+def format_stock_reply() -> str:
+    with emile.calls():
+        kitchen = emile.client()
+        entries, text = kitchen.stock().entries, kitchen.stock_text("compact")
+    if not entries:
         return _("🥫 *Stock*\nRien d'enregistré. Coche les articles de ta liste de courses quand tu les achètes, ou "
                  "dis-moi ce que tu as (« j'ai du riz, des œufs et du thon »).")
-    return (_("🥫 *Stock* ({count} articles)").format(count=len(pantry)) + "\n" + md_escape(format_pantry(pantry, today))
+    return (_("🥫 *Stock* ({count} articles)").format(count=len(entries)) + "\n" + md_escape(text)
             + "\n\n" + _("_Pour corriger : « j'ai fini le riz », « il reste 2 œufs », « j'ai acheté du pain »._"))
 
 

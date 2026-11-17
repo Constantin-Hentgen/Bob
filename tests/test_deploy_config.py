@@ -1,5 +1,4 @@
 """Garde-fous de configuration : toute variable lue par le code doit être déclarée partout."""
-import os
 import re
 from pathlib import Path
 
@@ -39,20 +38,3 @@ def test_str_strips_quotes_and_treats_empty_as_unset(monkeypatch):
 
 def test_briefing_off():
     assert config._briefing_time("off") is None and config._briefing_time("07:30") == (7, 30)
-
-
-def test_shopping_calendar_is_opt_in_accepts_old_names_and_never_the_training_calendar(monkeypatch):
-    monkeypatch.setenv("CALDAV_URL", "https://dav.example/me/cal/")
-    for name in ("CALDAV_SHOPPING_URL", "RADICALE_SHOPPING_URL", "RADICALE_TASKS_URL"):
-        monkeypatch.delenv(name, raising=False)
-    assert config.Settings.from_env().caldav_shopping_url is None
-    monkeypatch.setenv("RADICALE_TASKS_URL", "https://dav.example/me/shopping/")      # ancien nom
-    assert config.Settings.from_env().caldav_shopping_url == "https://dav.example/me/shopping/"
-    monkeypatch.setenv("RADICALE_SHOPPING_URL", "https://dav.example/me/courses/")    # ancien nom, plus récent
-    assert config.Settings.from_env().caldav_shopping_url == "https://dav.example/me/courses/"
-    monkeypatch.setenv("CALDAV_SHOPPING_URL", "https://dav.example/me/achats/")       # le nouveau nom prime
-    assert config.Settings.from_env().caldav_shopping_url == "https://dav.example/me/achats/"
-    monkeypatch.setenv("CALDAV_SHOPPING_URL", "https://dav.example/me/cal")           # agenda d'entraînement
-    assert config.Settings.from_env().caldav_shopping_url is None
-    monkeypatch.setenv("CALDAV_SHOPPING_URL", "off")
-    assert config.Settings.from_env().caldav_shopping_url is None

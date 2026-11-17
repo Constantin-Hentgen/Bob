@@ -154,8 +154,16 @@ MESSAGES: dict[str, str] = {
         '🥫 *Still there?* These fresh items are reaching their date:',
     ' · acheté il y a {days} j':
         ' · bought {days} d ago',
-    '_Sans réponse sous {days} j, je les retire du stock._':
-        "_No answer within {days} d and I'll remove them from the stock._",
+    '_Sans réponse au bout de quelques jours, je les retire du stock._':
+        "_No answer after a few days and I'll remove them from the stock._",
+    "🛒 La cuisine (courses et stock) ne répond pas pour l'instant. Réessaie dans un moment.":
+        "🛒 The kitchen (groceries and stock) isn't answering right now. Try again in a moment.",
+    "La cuisine ne répond pas, rien n'a changé. Réessaie dans un moment.":
+        "The kitchen isn't answering, nothing changed. Try again in a moment.",
+    "⚠️ Repas noté, mais le stock n'a pas pu être mis à jour (la cuisine ne répond pas).":
+        "⚠️ Meal logged, but the stock couldn't be updated (the kitchen isn't answering).",
+    "🛒 La liste est enregistrée, mais je n'arrive pas à l'afficher pour l'instant : /list la montrera dans un moment.":
+        "🛒 The list is saved, but I can't show it right now: /list will show it in a moment.",
     '🗑️ Retirés du stock (pas de réponse) : {items}':
         '🗑️ Removed from the stock (no answer): {items}',
     '❌ Dreeve indisponible : {error}':
@@ -470,22 +478,6 @@ MESSAGES: dict[str, str] = {
         ' (~{weeks} wk)',
     'cible {target}':
         'target {target}',
-    " · aujourd'hui":
-        ' · today',
-    ' · il y a {days} j':
-        ' · {days} d ago',
-    " — acheté aujourd'hui":
-        ' — bought today',
-    ' — acheté il y a {days} j':
-        ' — bought {days} d ago',
-    ' — à vérifier (« encore là ? » envoyé)':
-        ' — to check (“still there?” sent)',
-    ' — date dépassée':
-        ' — past its date',
-    " — à consommer aujourd'hui":
-        ' — eat today',
-    " — se garde jusqu'au {day}":
-        ' — keeps until {day}',
     "⚠️ Attention, en vrai rien n'a changé dans ton agenda.":
         '⚠️ Heads up: nothing actually changed in your calendar.',
     "⚠️ J'ai pas réussi à ajouter « {event} » dans ton agenda. On réessaie ?":
@@ -494,8 +486,6 @@ MESSAGES: dict[str, str] = {
         "⚠️ I couldn't change “{event}” in your calendar. Shall we try again?",
     "⚠️ J'ai pas réussi à supprimer « {event} » dans ton agenda. On réessaie ?":
         "⚠️ I couldn't delete “{event}” from your calendar. Shall we try again?",
-    "⚠️ J'ai pas réussi à mettre ta liste de courses dans l'agenda courses.":
-        "⚠️ I couldn't put your shopping list in the shopping calendar.",
     "⚠️ J'ai dû m'arrêter en route, jette un œil à ton agenda pour vérifier.":
         '⚠️ I had to stop partway, take a look at your calendar to check.',
     "⚠️ J'ai eu un bug en route 🥲 Réessaie ?":
@@ -504,6 +494,4 @@ MESSAGES: dict[str, str] = {
         'avg HR {hr}',
     'Sortie':
         'Run',
-    '🛒 Divers':
-        '🛒 Other',
 }

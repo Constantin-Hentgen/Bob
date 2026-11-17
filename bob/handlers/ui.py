@@ -2,16 +2,23 @@
 import asyncio
 import contextlib
 import datetime
+import logging
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
 from telegram.error import BadRequest
+from emile.core import render
+from emile.core.models import ShoppingList, StockEntry
+from emile.core.stock import box_count
 
-from .. import coaching
-from .. import calendar_store as cs
 from ..formatting import bubbles, md_escape, md_unescape, split_message
 from ..memory import LEGS, store
+from ..config import settings
 from ..i18n import _
+from ..services import ServiceError
+from ..services import emile
+
+logger = logging.getLogger(__name__)
 
 
 def merge_messages(texts: list[str]) -> str:
@@ -124,10 +131,16 @@ def meal_guesses(now: datetime.datetime) -> list[dict]:
     """Ce que l'athlète a probablement mangé : ses boîtes prêtes (la plus ancienne d'abord), puis les plats que le coach
     lui a proposés récemment (le plus récent d'abord). [{text, uses, macros, box, source}]"""
     guesses = []
-    for p in sorted((p for p in store.pantry if p.get("boxes")), key=lambda p: p.get("added") or ""):
-        n = coaching.box_count(p.get("qty"))
-        use = {"name": p["name"], **({"qty_left": f"{n - 1} boîte{'s' if n > 2 else ''}"} if n > 1 else {})}
-        guesses.append({"text": p["name"], "uses": [use], "macros": {}, "box": True, "source": None})
+    try:   # les boîtes sont un indice : sans Emile, la question se pose avec les seuls plats proposés
+        with emile.calls():
+            stock = emile.client().stock().entries
+    except ServiceError as e:
+        logger.error(f"Boîtes non lues pour la question repas : {e}")
+        stock = []
+    for entry in sorted((e for e in stock if e.boxes), key=lambda e: e.added):
+        n = box_count(entry.qty)
+        use = {"name": entry.name, **({"qty_left": f"{n - 1} boîte{'s' if n > 2 else ''}"} if n > 1 else {})}
+        guesses.append({"text": entry.name, "uses": [use], "macros": {}, "box": True, "source": None})
     cutoff = now - datetime.timedelta(hours=MEAL_GUESS_HOURS)
     recent = [(pid, item) for pid, item in store.state["proposals"].items()
               if item.get("kind") == "meal" and item["status"] == "open" and not item.get("makes")
@@ -165,32 +178,32 @@ def without_button(markup: InlineKeyboardMarkup | None, data: str) -> InlineKeyb
     return InlineKeyboardMarkup(rows) if rows else None
 
 
-def pantry_check_markup(items: list[dict]) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([[InlineKeyboardButton(f"✅ {p['name']}"[:40], callback_data=f"k:y:{p['id']}"),
-                                  InlineKeyboardButton(_("🗑️ Fini"), callback_data=f"k:n:{p['id']}")] for p in items])
+def pantry_check_markup(entries: list[StockEntry]) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([[InlineKeyboardButton(f"✅ {e.name}"[:40], callback_data=f"k:y:{e.id}"),
+                                  InlineKeyboardButton(_("🗑️ Fini"), callback_data=f"k:n:{e.id}")] for e in entries])
 
 
-def shopping_text(lst: dict) -> str:
-    done = sum(i["done"] for i in lst["items"])
-    total = len(lst["items"])
+def shopping_text(lst: ShoppingList) -> str:
+    done = sum(i.done for i in lst.items)
+    total = len(lst.items)
     status = _("tout est dans le panier 🎉") if done == total else f"{done}/{total} ✅"
     lines = [_("🛒 *Liste de courses* — {status}").format(status=status)]
-    if summary := cs.shopping_summary_line(lst):
+    if summary := render.summary_line(lst, settings.language):
         lines.append(f"📆 {md_escape(summary)}")
-    if lst.get("coverage"):
-        lines.append(f"🍽️ {md_escape(lst['coverage'])}")
+    if lst.coverage:
+        lines.append(f"🍽️ {md_escape(lst.coverage)}")
     lines.append(_("_Touche un article quand il est dans le panier. Recettes : /recipes_"))
     return "\n".join(lines)
 
 
-def shopping_markup(lst: dict) -> InlineKeyboardMarkup:
+def shopping_markup(lst: ShoppingList) -> InlineKeyboardMarkup:
     """Un bouton par article (☐ → ✅), précédé d'un bouton-titre par rayon ; « Tout décocher » en bas."""
-    lid, rows = lst["id"], []
-    for aisle, entries in cs.group_by_aisle(lst["items"]).items():
+    rows = []
+    for aisle, entries in render.group_by_aisle(lst.items, settings.language).items():
         rows.append([InlineKeyboardButton(f"— {aisle} —", callback_data="s:n")])
-        rows += [[InlineKeyboardButton(f"{'✅' if item['done'] else '☐'} {cs.item_label(item)}", callback_data=f"s:t:{lid}:{i}")]
+        rows += [[InlineKeyboardButton(f"{'✅' if item.done else '☐'} {render.item_label(item)}", callback_data=f"s:t:{lst.id}:{i}")]
                  for i, item in entries]
-    rows.append([InlineKeyboardButton(_("🧹 Tout décocher"), callback_data=f"s:r:{lid}")])
+    rows.append([InlineKeyboardButton(_("🧹 Tout décocher"), callback_data=f"s:r:{lst.id}")])
     return InlineKeyboardMarkup(rows)
 
 

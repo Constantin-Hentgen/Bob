@@ -141,17 +141,6 @@ def _llm_provider(value: str | None, base_url: str | None) -> str:
     return provider
 
 
-def _shopping_url(value: str | None, training_url: str | None) -> str | None:
-    """Agenda courses : désactivé s'il est vide, « off », ou identique à l'agenda d'entraînement (les événements
-    courses s'y mêleraient aux séances)."""
-    value = _optional_model(value)
-    if value and training_url and value.rstrip("/") == training_url.rstrip("/"):
-        logger.error("[CONFIG] CALDAV_SHOPPING_URL est l'agenda d'entraînement : liste de courses non enregistrée "
-                     "dans l'agenda. Indique l'URL de ton agenda courses dédié.")
-        return None
-    return value
-
-
 def _optional_model(value: str | None) -> str | None:
     """Valeur, ou None si vide ou « off » (modèle Whisper, URL de la liste de courses…)."""
     return None if not value or value.lower() in ("off", "non", "no", "none", "0") else value
@@ -183,7 +172,6 @@ class Settings:
     caldav_url: str | None
     caldav_user: str | None
     caldav_pass: str | None
-    caldav_shopping_url: str | None
     # Dreeve
     dreeve_url: str | None
     dreeve_api_key: str | None
@@ -214,7 +202,6 @@ class Settings:
     nutrition_check_time: tuple[int, int] | None
     meal_check_times: list[tuple[int, int]]
     eat_suggest_times: list[tuple[int, int]]
-    meal_boxes: int
     whisper_model: str | None
     activity_poll_minutes: int
     planning_horizon_days: int
@@ -252,9 +239,6 @@ class Settings:
             caldav_url=caldav_url,
             caldav_user=_str("CALDAV_USER") or _str("RADICALE_USER"),
             caldav_pass=_str("CALDAV_PASS") or _str("RADICALE_PASS"),
-            # Agenda courses dédié (RADICALE_SHOPPING_URL, RADICALE_TASKS_URL : anciens noms). Jamais l'agenda d'entraînement.
-            caldav_shopping_url=_shopping_url(
-                _str("CALDAV_SHOPPING_URL") or _str("RADICALE_SHOPPING_URL") or _str("RADICALE_TASKS_URL"), caldav_url),
             dreeve_url=dreeve_url,
             dreeve_api_key=_str("DREEVE_API_KEY"),
             dreeve_mcp_key=_str("DREEVE_MCP_KEY"),
@@ -282,7 +266,6 @@ class Settings:
             language=_language(_str("BOT_LANGUAGE")),
             meal_check_times=_meal_times(_str("MEAL_CHECK_TIMES", "10:30,14:30,21:30")),
             eat_suggest_times=_meal_times(_str("EAT_SUGGEST_TIMES", "07:00,11:30,18:30"), "EAT_SUGGEST_TIMES"),
-            meal_boxes=max(1, _int("MEAL_BOXES", 3)),
             whisper_model=_optional_model(_str("WHISPER_MODEL", "small")),
             activity_poll_minutes=_int("ACTIVITY_POLL_MINUTES", 1),
             planning_horizon_days=_int("PLANNING_HORIZON_DAYS", 30),
@@ -331,7 +314,6 @@ class Settings:
             "TELEGRAM_CHAT_ID (sécurité + briefing + débriefs)": self.telegram_chat_id,
             "Dreeve REST (DREEVE_URL + DREEVE_API_KEY)": self.dreeve_enabled,
             "Dreeve MCP (DREEVE_MCP_KEY)": self.dreeve_mcp_key and self.dreeve_mcp_url,
-            "Liste de courses dans l'agenda courses (CALDAV_SHOPPING_URL)": self.caldav_shopping_url,
             f"Messages vocaux (WHISPER_MODEL={self.whisper_model or 'off'})": self.whisper_model,
             f"Météo ({', '.join(n for n, __, __ in self.weather_locations) or 'WEATHER_LOCATIONS'})": self.weather_enabled,
             f"Remy, nutrition ({self.remy_url}, REMY_API_KEY)": self.remy_enabled,
@@ -342,7 +324,7 @@ class Settings:
         logger.info(f"[CONFIG] fournisseur={self.llm_provider} ({self.llm_base_url or 'api.anthropic.com'}), "
                     f"modèles={self.model} (conversation) / {self.planning_model} (planification), "
                     f"fuseau={self.tz.key}, briefing={self.briefing_time}, bilan hebdo={self.weekly_review}, "
-                    f"vérification du stock={self.pantry_check_time}, questions repas={self.meal_check_times}, suggestions repas={self.eat_suggest_times}, boîtes={self.meal_boxes}, "
+                    f"vérification du stock={self.pantry_check_time}, questions repas={self.meal_check_times}, suggestions repas={self.eat_suggest_times}, "
                     f"détection runs={self.activity_poll_minutes} min")
 
 

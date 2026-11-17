@@ -9,6 +9,7 @@ from telegram.ext import ContextTypes
 from .. import agent, coaching, commands, dreeve, nutrition
 from ..config import TZ, settings
 from ..services import ServiceError
+from ..services import emile
 from ..formatting import md_escape, md_unescape
 from ..memory import store
 from .ui import MEAL_SLOT_WHEN, close_meal_guesses, has_recipe, meal_guesses, meal_rows, recent_eat_options, without_button
@@ -61,8 +62,27 @@ class MealsMixin:
                 await query.answer(_("Le journal des repas ne répond pas, rien n'a été noté. Réessaie dans un moment."),
                                    show_alert=True)
                 return
-        r = store.update_pantry(remove=[] if dup else (item.get("uses") or []))
+        # Stock chez Emile, en un seul appel (tout ou rien) : ce que le plat consomme et, s'il fait des boîtes, les boîtes
+        add = [] if dup or not item.get("makes") else [{"name": item["text"], "qty": item["makes"], "keeps_days": 4, "boxes": True}]
+        remove = [] if dup else (item.get("uses") or [])
+        r = {"added": [], "removed": [], "updated": [], "not_found": []}
+        stock_down = False
+        if add or remove:
+            try:
+                def update_stock() -> dict:
+                    with emile.calls():
+                        return emile.client().update_stock(add, remove).model_dump()
+                r = await asyncio.to_thread(update_stock)
+            except ServiceError as e:
+                logger.error(f"Stock non mis à jour : {e}")
+                if not logs:   # rien n'est fait : le bouton reste utilisable
+                    store.reopen_proposal(mid)
+                    await query.answer(_("La cuisine ne répond pas, rien n'a changé. Réessaie dans un moment."), show_alert=True)
+                    return
+                stock_down = True   # le repas, lui, est noté : on le dit
         await query.answer()
+        if stock_down:
+            await self._push(_("⚠️ Repas noté, mais le stock n'a pas pu être mis à jour (la cuisine ne répond pas)."))
         if item.get("check"):   # réponse à « tu as mangé quoi ? » : une ligne, et la question est close
             await self._on_meal_guess(query, item, r, dup)
             return
@@ -74,16 +94,13 @@ class MealsMixin:
                         store.close_proposal(other, "ignored")
                         markup = without_button(markup, btn.callback_data)
         await query.edit_message_reply_markup(markup)
-        changes = [f"−{x}" for x in r["removed"]] + r["updated"]
         text = _("Déjà noté 👌")
-        if item.get("makes") and not dup:   # boîtes pour plus tard : elles entrent au stock
-            store.update_pantry(add=[{"name": item["text"], "qty": item["makes"], "keeps_days": 4, "boxes": True}])
-            changes.append(f"+{item['text']} ({item['makes']})")
+        if item.get("makes") and not dup and not stock_down:   # boîtes pour plus tard : elles sont entrées au stock
             text = _("Top, {boxes} de côté pour les prochains jours 🙌").format(boxes=md_escape(item['makes']))
         if (item.get("recipe") or not item.get("makes")) and not dup:   # /eat (choisi = mangé) ou plat mangé : noté
             text = _("Bon app' 😋") if not item.get("makes") else text
         if item.get("recipe"):   # plat choisi : la recette, simplement
-            boxes = _(" (et {boxes} de côté 🙌)").format(boxes=md_escape(item['makes'])) if item.get("makes") else ""
+            boxes = _(" (et {boxes} de côté 🙌)").format(boxes=md_escape(item['makes'])) if item.get("makes") and not stock_down else ""
             text = _("Bon choix 😋 *{dish}*{boxes}, voilà comment faire :").format(dish=md_escape(item['text']), boxes=boxes) \
                 + f"\n\n{item['recipe']}"
         await self._push(text)
@@ -214,7 +231,7 @@ class MealsMixin:
             # on part de ce qu'on sait (boîtes prêtes, plats proposés) : un geste suffit dans le cas courant
             at = datetime.datetime.combine(now.date(), end, tzinfo=TZ).isoformat()
             rows = []
-            for g in meal_guesses(now):
+            for g in await asyncio.to_thread(meal_guesses, now):
                 gid = store.add_proposal(g["text"], kind="meal", uses=g["uses"], macros=g["macros"], at=at,
                                          check=key, source=g["source"])
                 rows.append([InlineKeyboardButton(f"{'🍱' if g['box'] else '🍽️'} {g['text']}"[:60], callback_data=f"m:{gid}")])

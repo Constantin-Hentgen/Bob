@@ -57,3 +57,21 @@ def test_bob_nutrition_round_trip_on_the_real_remy(adapters):
     snap = nutrition.snapshot([], at.date())
     assert snap.today.meals == 1 and "profil incomplet" in nutrition.energy_context(snap, at.date())
     assert nutrition.remove_meal(meal["id"])["text"] == "Riz poulet"
+
+
+def test_bob_kitchen_round_trip_on_the_real_emile(adapters):
+    from bob.handlers.ui import shopping_markup, shopping_text
+    from bob.services import Conflict
+    __, emile = adapters
+    with emile.calls():
+        kitchen = emile.client()
+        first = kitchen.create_list([{"name": "Riz", "quantity": "500 g", "aisle": "🍚 Féculents"}, {"name": "Œufs"}], days=7)
+        second = kitchen.create_list([{"name": "Pâtes"}])                       # remplace la première : ses boutons sont périmés
+    assert "0/1" in shopping_text(second) and shopping_markup(second).inline_keyboard[-1][0].callback_data == f"s:r:{second.id}"
+    with pytest.raises(Conflict), emile.calls():
+        kitchen.toggle(first.id, 0)
+    with emile.calls():
+        assert kitchen.toggle(second.id, 0).items[0].done                       # coché = acheté
+        assert "Pâtes" in kitchen.stock_text("prompt")
+        assert kitchen.update_stock(remove=[{"name": "Pâtes"}]).removed == ["Pâtes"]
+        assert kitchen.expire().removed == [] and kitchen.to_check().entries == []
