@@ -1,6 +1,6 @@
-"""Services voisins de Bob, dans le même stack Docker : Remy (nutrition), Emile (courses).
+"""Services voisins de Bob, dans le même stack Docker : Remy (nutrition), Emile (courses), Dora (boucles).
 
-Chaque service a son module (`remy`, `emile`) qui expose un client typé, construit une fois depuis la configuration.
+Chaque service a son module (`remy`, `emile`, `dora`) qui expose un client typé, construit une fois depuis la configuration.
 Le reste de Bob n'appelle jamais leur HTTP directement et ne voit qu'un seul modèle d'erreur :
 
     from bob.services import ServiceError, Unavailable

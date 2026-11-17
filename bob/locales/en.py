@@ -224,8 +224,6 @@ MESSAGES: dict[str, str] = {
         "A{kind} loop you've never run from {place} 👀",
     '{count} boucles{kind} de ~{km} km depuis {place} 👇':
         '{count}{kind} loops of ~{km} km from {place} 👇',
-    'Boucle {n} · {km} km · {place}':
-        'Loop {n} · {km} km · {place}',
     'boucle-{n}-{km}km.gpx':
         'loop-{n}-{km}km.gpx',
     "Les boucles sont prêtes mais Telegram n'a pas voulu les prendre 🥲 Réessaie ?":
@@ -436,20 +434,6 @@ MESSAGES: dict[str, str] = {
         ' (risk {prob} %)',
     'ressenti {temp}°C':
         'feels like {temp}°C',
-    '{pct} % bitume':
-        '{pct} % paved',
-    '{pct} % sans voitures ni foule':
-        '{pct} % free of cars and crowds',
-    '{n} traversées':
-        '{n} crossings',
-    '{n} traversée':
-        '{n} crossing',
-    '{pct} % nature':
-        '{pct} % unpaved',
-    '{pct} % sur sentiers balisés':
-        '{pct} % on waymarked trails',
-    '{pct} % jamais couru':
-        '{pct} % never run',
     '🔁 Adapter':
         '🔁 Adapt',
     '👍 Je garde':

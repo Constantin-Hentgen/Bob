@@ -61,7 +61,7 @@ def test_no_throwaway_underscore_shadows_the_translation_function():
 
 ENGLISH_RUN = r'''
 import datetime
-from bob import agent, commands, routes, voice, weather, weather_alerts as wa
+from bob import agent, commands, voice, weather, weather_alerts as wa
 from bob.config import TZ, settings
 from bob.handlers import ui
 day = datetime.date(2026, 11, 14)
@@ -80,7 +80,6 @@ nutrition.update_profile(weight_kg=70, height_cm=178, birth_year=1995, sex="homm
 nutrition.log_meal("Porridge", datetime.datetime(2026, 11, 14, 8, 0, tzinfo=TZ),
                    estimate={"kcal": 450, "protein_g": 15, "carbs_g": 70, "fat_g": 10})
 snap = nutrition.snapshot([], day)
-lp = routes.Loop(points=[], km=6.24, quiet=.5, calm=.4, busy=0, paved=1, crossings=12, marked=.3)
 n = wa.Notice("alert", key="k", uid="u", summary="Easy run", start=datetime.datetime(2026, 11, 15, 18, tzinfo=TZ),
               end=datetime.datetime(2026, 11, 15, 19, tzinfo=TZ), place="Home", hazards={"pluie": "80 %, 2.0 mm"}, others={"Work": {}})
 daily = {"time": ["2026-11-15"], "weathercode": [61], "temperature_2m_min": [4.0], "temperature_2m_max": [11.0],
@@ -88,7 +87,7 @@ daily = {"time": ["2026-11-15"], "weathercode": [61], "temperature_2m_min": [4.0
 out = [commands.HELP_TEXT, *(c.description for c in commands.BOT_COMMANDS),
        commands.format_day_recap(snap, day), commands.format_nutrition(snap, nutrition.meals_since(day), day),
        commands.format_agenda([], 7), commands.format_stock_reply(), kitchen.stock_text("prompt"), kitchen.list_text("prompt"), kitchen.stock_text("boxes"), ui.shopping_text(shopping), commands.format_goals_reply([], day),
-       commands.format_form({"tsb": {}, "acRatio": {}}, [], day), routes.describe(lp, "route"), routes.describe(lp, "nature"),
+       commands.format_form({"tsb": {}, "acRatio": {}}, [], day),
        wa.format_notice(n, datetime.datetime(2026, 11, 14, 20, tzinfo=TZ)), weather.format_forecast([daily], ["Home"], {"Home": []}),
        ui.PROPOSAL_OUTCOME["a"], ui.MEAL_HINT, *ui.LEG_LABELS.values()]
 print("\n@@\n".join(out))
@@ -107,7 +106,7 @@ def test_english_bot_speaks_english_end_to_end(tmp_path):
     assert res.returncode == 0, res.stderr
     text, lang = res.stdout.split("@@LANG@@")
     assert lang.split() == ["True", "en", "Voice"]
-    assert "Your day on the plate" in text and "12 crossings" in text and "Home: ☔ rain" in text and "Sun 15/11" in text
+    assert "Your day on the plate" in text and "Home: ☔ rain" in text and "Sun 15/11" in text
     french = re.findall(r"\b(?:tu|ton|ta|tes|je|séances?|repas|boîtes?|aujourd'hui|jours?|pluie|besoins|sortie|"
                         r"lundi|dimanche|dans|avec|pour|sur)\b", text, re.I)
     assert not french, f"mots français dans la sortie anglaise : {sorted(set(french))}"

@@ -12,6 +12,7 @@ from remy.client import RemyError
 
 from bob import services
 from bob.services import Conflict, Invalid, NotConfigured, NotFound, Unauthorized, Unavailable
+from bob.services import dora as dora_service
 from bob.services import emile as emile_service
 from bob.services import remy as remy_service
 
@@ -68,6 +69,7 @@ def test_health_lists_only_the_configured_services(monkeypatch):
     from bob import app as app_module
     monkeypatch.setattr(remy_service, "enabled", lambda: True)
     monkeypatch.setattr(emile_service, "enabled", lambda: False)
+    monkeypatch.setattr(dora_service, "enabled", lambda: False)
     assert app_module.services_health() == {"remy": {"ok": None, "error": None, "at": None}}
     with remy_service.calls():
         pass
@@ -97,3 +99,24 @@ def test_compose_runs_the_services_privately_at_the_client_versions():
         client_version = re.search(r"/v([\d.]+)\.tar\.gz$", sources[name]["url"]).group(1)
         assert image_version == client_version, f"{name} : image {image_version} ≠ client {client_version}"
         assert name in compose["bob"]["depends_on"]
+
+
+def test_dora_and_its_router_are_built_from_the_client_version_and_stay_private():
+    compose = yaml.safe_load((ROOT / "docker-compose.yml").read_text())["services"]
+    sources = tomllib.loads((ROOT / "pyproject.toml").read_text())["tool"]["uv"]["sources"]
+    version = re.search(r"/v([\d.]+)\.tar\.gz$", sources["dora-routes"]["url"]).group(1)
+    assert compose["dora"]["build"].endswith(f"#v{version}") and compose["dora"]["image"] == f"dora:{version}"
+    assert compose["brouter"]["build"]["context"].endswith(f"#v{version}")
+    assert compose["segments"]["command"] == ["dora-segments", "--ok-if-present"]
+    for name in ("dora", "brouter", "segments"):
+        assert "ports" not in compose[name], f"{name} ne doit pas être publié sur l'hôte"
+    assert "dora" in compose["bob"]["depends_on"]
+
+
+def test_dora_errors_become_bob_service_errors():
+    from dora_routes.client import DoraError, PlaceNotFoundError, ServiceUnavailableError
+    for error, expected in ((PlaceNotFoundError(404, "no such place"), NotFound),
+                            (ServiceUnavailableError(503, "BRouter down"), Unavailable),
+                            (DoraError(422, "bad request"), Invalid)):
+        with pytest.raises(expected), dora_service.calls():
+            raise error

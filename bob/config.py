@@ -214,6 +214,7 @@ class Settings:
     remy_url: str
     remy_api_key: str | None
     emile_url: str
+    dora_url: str
     emile_api_key: str | None
 
     @classmethod
@@ -277,6 +278,7 @@ class Settings:
             remy_url=_str("REMY_URL", "http://remy:8000").rstrip("/"),
             remy_api_key=_str("REMY_API_KEY"),
             emile_url=_str("EMILE_URL", "http://emile:8000").rstrip("/"),
+            dora_url=_str("DORA_URL", "http://dora:8000").rstrip("/"),
             emile_api_key=_str("EMILE_API_KEY"),
         )
 
@@ -318,6 +320,7 @@ class Settings:
             f"Météo ({', '.join(n for n, __, __ in self.weather_locations) or 'WEATHER_LOCATIONS'})": self.weather_enabled,
             f"Remy, nutrition ({self.remy_url}, REMY_API_KEY)": self.remy_enabled,
             f"Emile, courses ({self.emile_url}, EMILE_API_KEY)": self.emile_enabled,
+            f"Dora, boucles ({self.dora_url})": bool(self.dora_url),
         }
         for name, ok in optional.items():
             logger.info(f"[CONFIG] {name} : {'activé' if ok else 'désactivé'}")

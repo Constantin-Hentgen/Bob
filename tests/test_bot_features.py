@@ -1308,11 +1308,11 @@ def test_evening_recap_daily_and_coach_note_only_when_something_is_off(tmp_path,
     assert len(asked) == 1 and len(b.sent) == sent
 
 
-def test_newroute_asks_surface_then_distance_with_buttons(tmp_path, monkeypatch):
-    from bob import routes
+def test_newroute_asks_surface_then_distance_with_buttons(tmp_path, monkeypatch, dora):
+    from tests.conftest import fake_loop
     b, _ = _bot(tmp_path, monkeypatch)
     places = [("Maison", 48.8, 2.3)]
-    monkeypatch.setattr(info, "settings", NS(weather_locations=places, dreeve_enabled=False))
+    monkeypatch.setattr(info, "settings", NS(weather_locations=places, dreeve_enabled=False, language="fr"))
     monkeypatch.setattr(info.cs, "list_events", lambda a, b: ([], 0))
     replies, sent = [], {}
 
@@ -1320,10 +1320,10 @@ def test_newroute_asks_surface_then_distance_with_buttons(tmp_path, monkeypatch)
         replies.append((text, reply_markup))
 
     async def reply_photo(img, caption=None):
-        sent["caption"] = caption
+        sent.update(caption=caption, img=img)
 
     async def reply_document(doc, filename=None):
-        sent["file"] = filename
+        sent.update(file=filename, doc=doc)
 
     message = NS(reply_text=reply_text, reply_photo=reply_photo, reply_document=reply_document, text="",
                  chat=NS(send_action=_noop))
@@ -1340,26 +1340,78 @@ def test_newroute_asks_surface_then_distance_with_buttons(tmp_path, monkeypatch)
     click(surface_btn)
     assert replies[-1][0].startswith("Combien de km")
     km_btn = dict(_buttons(replies[-1][1]))["10 km"]
-    seen = {}
-
-    def fake_find(start, km, count, runs, never_done, surface):
-        seen.update(start=start, km=km, surface=surface, never_done=never_done)
-        return [routes.Loop(points=[(48.8, 2.3, None)], km=10.1, quiet=0.5, calm=0.5, busy=0.0, crossings=3)]
-
-    monkeypatch.setattr(info.routes, "find_loops", fake_find)
-    monkeypatch.setattr(info.routes, "to_map_png", lambda lp, start: b"img")
+    dora.loops = [fake_loop(novelty=1.0)]
     click(km_btn)
-    assert seen == {"start": (48.8, 2.3), "km": 10.0, "surface": "route", "never_done": True}
-    assert "3 traversées" in sent["caption"] and sent["file"].endswith(".gpx")
-    assert any("jamais faite" in t for t, _ in b.sent)
+    (request,) = dora.requests                        # une seule requête, dans la forme que Dora attend
+    assert request == {"start": {"lat": 48.8, "lon": 2.3}, "distance_km": 10.0, "surface": "paved", "count": 1,
+                       "never_done": True, "lang": "fr", "activity": "running", "avoid_tracks": []}
+    assert sent["caption"] == "1. 10,1 km · 70 % bitume · 3 traversées · © OpenStreetMap"   # légende de Dora
+    assert sent["file"] == "boucle-1-10,1km.gpx" and sent["doc"] == b"<gpx/>" and sent["img"] == b"png"
+    assert any("jamais faite depuis Maison" in t for t, _ in b.sent)
     assert click(km_btn).answers == ["Demande expirée, relance /newroute"]   # déjà utilisé
 
 
-def test_newroute_unknown_place_says_so(tmp_path, monkeypatch):
+def test_routes_three_loops_named_after_the_place_dora_found(tmp_path, monkeypatch, dora):
+    from tests.conftest import fake_loop
     b, _ = _bot(tmp_path, monkeypatch)
-    monkeypatch.setattr(info, "settings", NS(weather_locations=[("Maison", 48.8, 2.3)], dreeve_enabled=False))
+    monkeypatch.setattr(info, "settings", NS(weather_locations=[("Maison", 48.8, 2.3)], dreeve_enabled=False, language="en"))
     monkeypatch.setattr(info.cs, "list_events", lambda a, b: ([], 0))
-    monkeypatch.setattr(info.routes, "geocode", lambda q, near: None)
+    albums = []
+
+    async def reply_media_group(media):
+        albums.append(media)
+
+    dora.place = {"name": "Bois de Vincennes", "lat": 48.83, "lon": 2.43}
+    dora.loops = [fake_loop(n=i, km=8.0 + i / 10) for i in (1, 2, 3)]
+    message = NS(text="", chat=NS(send_action=_noop), reply_media_group=reply_media_group)
+    asyncio.run(b.on_routes(NS(message=message, effective_chat=NS(id=42)), NS(args=["8", "nature", "bois", "de", "vincennes"])))
+    (request,) = dora.requests
+    assert request["place"] == "bois de vincennes" and request["near"] == {"lat": 48.8, "lon": 2.3}
+    assert (request["surface"], request["count"], request["lang"], request["never_done"]) == ("unpaved", 3, "en", False)
+    assert any("depuis Bois de Vincennes" in t for t, _ in b.sent)
+    photos, docs = albums
+    assert [p.caption[:2] for p in photos] == ["1.", "2.", "3."] and photos[0].caption.endswith("© OpenStreetMap")
+    assert [d.media.filename for d in docs] == ["boucle-1-8,1km.gpx", "boucle-2-8,2km.gpx", "boucle-3-8,3km.gpx"]
+
+
+def test_never_done_sends_past_tracks_and_says_when_none_is_fully_new(tmp_path, monkeypatch, dora):
+    from tests.conftest import fake_loop
+    b, _ = _bot(tmp_path, monkeypatch)
+    monkeypatch.setattr(info, "settings", NS(weather_locations=[("Maison", 48.8, 2.3)], dreeve_enabled=True, language="fr"))
+    monkeypatch.setattr(info.cs, "list_events", lambda a, b: ([], 0))
+    monkeypatch.setattr(info.dreeve, "get_all_runs", lambda: [{"encodedPolyline": "_p~iF~ps|U_ulLnnqC"}, {"id": 2}])
+
+    async def reply_photo(img, caption=None):
+        pass
+
+    async def reply_document(doc, filename=None):
+        pass
+
+    dora.loops = [fake_loop(novelty=0.55)]
+    message = NS(text="", chat=NS(send_action=_noop), reply_photo=reply_photo, reply_document=reply_document)
+    asyncio.run(b.on_new_route(NS(message=message, effective_chat=NS(id=42)), NS(args=["8", "nature"])))
+    assert dora.requests[0]["avoid_tracks"] == ["_p~iF~ps|U_ulLnnqC"]
+    assert any("Pas trouvé de boucle nature 100 % inédite" in t for t, _ in b.sent)
+
+
+def test_routes_say_so_when_dora_or_its_router_is_down(tmp_path, monkeypatch, dora):
+    b, _ = _bot(tmp_path, monkeypatch)
+    monkeypatch.setattr(info, "settings", NS(weather_locations=[("Maison", 48.8, 2.3)], dreeve_enabled=False, language="fr"))
+    monkeypatch.setattr(info.cs, "list_events", lambda a, b: ([], 0))
+    message = NS(text="", chat=NS(send_action=_noop))
+    for status, loops in ((503, None), (200, [])):   # BRouter hors service ; aucune boucle trouvée
+        dora.status = status
+        if loops is not None:
+            dora.loops = loops
+        asyncio.run(b.on_routes(NS(message=message, effective_chat=NS(id=42)), NS(args=["8"])))
+        assert "J'ai pas réussi à tracer de boucle là" in b.sent[-1][0]
+
+
+def test_newroute_unknown_place_says_so(tmp_path, monkeypatch, dora):
+    b, _ = _bot(tmp_path, monkeypatch)
+    monkeypatch.setattr(info, "settings", NS(weather_locations=[("Maison", 48.8, 2.3)], dreeve_enabled=False, language="fr"))
+    monkeypatch.setattr(info.cs, "list_events", lambda a, b: ([], 0))
+    dora.status = 404
     message = NS(text="", chat=NS(send_action=_noop))
     asyncio.run(b.on_new_route(NS(message=message, effective_chat=NS(id=42)), NS(args=["8", "nature", "lac", "imaginaire"])))
     assert any("« lac imaginaire »" in t for t, _ in b.sent)

@@ -126,6 +126,7 @@ dependencies = [
     { name = "apscheduler" },
     { name = "av" },
     { name = "caldav" },
+    { name = "dora-routes" },
     { name = "emile", extra = ["client"] },
     { name = "fastapi" },
     { name = "faster-whisper" },
@@ -135,7 +136,6 @@ dependencies = [
     { name = "python-telegram-bot" },
     { name = "remy", extra = ["client"] },
     { name = "requests" },
-    { name = "staticmap" },
     { name = "tzdata" },
     { name = "uvicorn" },
 ]
@@ -154,6 +154,7 @@ requires-dist = [
     { name = "apscheduler", specifier = ">=3.10.4,<4" },
     { name = "av", specifier = ">=11,<19" },
     { name = "caldav", specifier = ">=1.3.0" },
+    { name = "dora-routes", url = "https://github.com/Constantin-Hentgen/Dora/archive/refs/tags/v0.6.0.tar.gz" },
     { name = "emile", extras = ["client"], url = "https://github.com/Constantin-Hentgen/Emile/archive/refs/tags/v0.6.0.tar.gz" },
     { name = "fastapi", specifier = ">=0.110.0" },
     { name = "faster-whisper", specifier = ">=1.1" },
@@ -163,7 +164,6 @@ requires-dist = [
     { name = "python-telegram-bot", specifier = ">=21.0" },
     { name = "remy", extras = ["client"], url = "https://github.com/Constantin-Hentgen/Remy/archive/refs/tags/v0.6.0.tar.gz" },
     { name = "requests", specifier = ">=2.31.0" },
-    { name = "staticmap", specifier = ">=0.5.7" },
     { name = "tzdata" },
     { name = "uvicorn", specifier = ">=0.28.0" },
 ]
@@ -539,6 +539,29 @@ sdist = { url = "https://files.pythonhosted.org/packages/e0/4d/f332313098c1de1b2
 wheels = [
     { url = "https://files.pythonhosted.org/packages/a7/5f/ed01f9a3cdffbd5a008556fc7b2a08ddb1cc6ace7effa7340604b1d16699/docstring_parser-0.18.0-py3-none-any.whl", hash = "sha256:b3fcbed555c47d8479be0796ef7e19c2670d428d72e96da63f3a40122860374b", size = 22484, upload-time = "2026-04-14T04:09:18.638Z" },
 ]
+
+[[package]]
+name = "dora-routes"
+version = "0.6.0"
+source = { url = "https://github.com/Constantin-Hentgen/Dora/archive/refs/tags/v0.6.0.tar.gz" }
+dependencies = [
+    { name = "httpx" },
+    { name = "pillow" },
+    { name = "pydantic" },
+    { name = "pydantic-settings" },
+]
+sdist = { hash = "sha256:38ebbddb5e82ba4fecbcddb9e83efe4591650c36025d82969429a1bff57dd23f" }
+
+[package.metadata]
+requires-dist = [
+    { name = "fastapi", marker = "extra == 'server'", specifier = ">=0.115" },
+    { name = "httpx", specifier = ">=0.28" },
+    { name = "pillow", specifier = ">=11" },
+    { name = "pydantic", specifier = ">=2.10" },
+    { name = "pydantic-settings", specifier = ">=2.6" },
+    { name = "uvicorn", extras = ["standard"], marker = "extra == 'server'", specifier = ">=0.32" },
+]
+provides-extras = ["server"]
 
 [[package]]
 name = "emile"
@@ -2167,19 +2190,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/48/bb/3d8757f21e9a53d9035c9eb039a777047139a16bfdbedfc7a58241c3d914/starlette-1.10.0.tar.gz", hash = "sha256:b8399098d4c1e3522734f7235dc79b1fc967f96cf139c81e0fa30479e0685f9b", size = 2734356, upload-time = "2026-10-24T15:04:12.342Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/88/2e/947cfe02def9371c07cd5bf5b6b61c829e9aecb9904db02a66cfafbc1eec/starlette-1.10.0-py3-none-any.whl", hash = "sha256:478c0ab3b4ced6e82719849c118fa406f0278a3499c1a898cd15cd31bdc38ce4", size = 80571, upload-time = "2026-10-24T15:04:10.371Z" },
-]
-
-[[package]]
-name = "staticmap"
-version = "0.5.7"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "pillow" },
-    { name = "requests" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/36/a8/939282f5e368ce0211b0a78f3adb55b3111a8a400b872e759ed1013cc407/staticmap-0.5.7.tar.gz", hash = "sha256:c7a96b902ba61292e818c20b0810619d6b81a6cdb50bcc1ab92d50ac4db20a7f", size = 7740, upload-time = "2023-08-01T12:33:05.598Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/39/69/6f6c04591cced82a807b4b1e71e892ca7dc40c96d337ec6bd00f7be7035d/staticmap-0.5.7-py3-none-any.whl", hash = "sha256:f4ffc40ee4502b92e91045e0df85a46a2fd68483b4e7e404a6b545fd7396ea01", size = 7027, upload-time = "2023-08-01T12:33:03.987Z" },
 ]
 
 [[package]]

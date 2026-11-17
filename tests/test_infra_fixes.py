@@ -1,13 +1,11 @@
 """Écritures CalDAV vérifiées, parsing BRouter, budget de temps des boucles, docs FastAPI, défauts de config."""
 import datetime
 import threading
-import time
 
 import pytest
 from caldav.lib.error import NotFoundError
 
 from bob import calendar_store as cs
-from bob import routes
 from bob.config import UTC
 
 H = datetime.timedelta(hours=1)
@@ -150,77 +148,6 @@ def test_calendar_client_is_per_thread(monkeypatch):
     t.start()
     t.join()
     assert seen[0] is not a and len(made) == 2
-
-
-# --- BRouter ---------------------------------------------------------------
-
-HEADER = ["Longitude", "Latitude", "Elevation", "Distance", "CostPerKm", "ElevCost", "TurnCost", "NodeCost",
-          "InitialCost", "WayTags", "NodeTags", "Time", "Energy"]
-
-
-def _row(dist, tags):
-    return ["2.3", "48.8", "35", str(dist), "0", "0", "0", "0", "0", tags, "", "1", "1"]
-
-
-class FakeResponse:
-    def __init__(self, payload):
-        self.payload = payload
-
-    def raise_for_status(self):
-        pass
-
-    def json(self):
-        return self.payload
-
-
-def test_route_parses_brouter_geojson(monkeypatch):
-    payload = {"features": [{
-        "properties": {"track-length": "5000", "filtered ascend": "42", "messages": [
-            HEADER, _row(2000, "highway=footway surface=asphalt"), _row(1000, "highway=residential"),
-            _row(500, "highway=primary"), _row(500, "highway=path"), _row(1000, "surface=gravel")]},
-        "geometry": {"coordinates": [[2.3, 48.8, 35], [2.31, 48.81, 40], [2.32, 48.82]]}}]}
-    calls = {}
-
-    def fake_get(url, **kw):
-        calls.update(kw)
-        return FakeResponse(payload)
-
-    monkeypatch.setattr(routes.requests, "get", fake_get)
-    loop = routes.route([(48.8, 2.3), (48.81, 2.31)])
-    assert loop.km == pytest.approx(5.0) and loop.climb == 42
-    assert loop.quiet == pytest.approx(2500 / 5000)    # footway + path
-    assert loop.calm == pytest.approx(1000 / 5000)
-    assert loop.busy == pytest.approx(500 / 5000)
-    assert loop.points[0] == (48.8, 2.3, 35) and loop.points[2][2] is None
-    assert calls["timeout"] == routes.BROUTER_TIMEOUT_S <= 15
-
-
-# --- find_loops : budget de temps -------------------------------------------
-
-def _fake_loop(bearing):
-    pts = [(48.8 + i * 0.001, 2.3 + bearing * 1e-5 * i, None) for i in range(20)]
-    return routes.Loop(points=pts, km=10.0, quiet=0.5, calm=0.3, busy=0.0, bearing=bearing)
-
-
-def test_find_loops_skips_bearings_over_budget(monkeypatch):
-    def fake(start, km, bearing):
-        if bearing in (60, 180):
-            time.sleep(1.5)
-        return _fake_loop(bearing)
-
-    monkeypatch.setattr(routes, "loop_at", fake)
-    monkeypatch.setattr(routes, "ROUTES_BUDGET_S", 0.3)
-    t0 = time.monotonic()
-    loops = routes.find_loops((48.8, 2.3), 10, count=6)
-    assert time.monotonic() - t0 < 1.2
-    assert loops and all(lp.bearing not in (60, 180) for lp in loops)
-
-
-def test_find_loops_deterministic_when_all_fast(monkeypatch):
-    monkeypatch.setattr(routes, "loop_at", lambda s, km, b: _fake_loop(b))
-    a = [lp.bearing for lp in routes.find_loops((48.8, 2.3), 10, count=3)]
-    b = [lp.bearing for lp in routes.find_loops((48.8, 2.3), 10, count=3)]
-    assert a == b and len(a) == 3
 
 
 # --- App et config -----------------------------------------------------------

@@ -78,6 +78,7 @@ services:
       REMY_URL: ${REMY_URL:-}
       REMY_API_KEY: ${REMY_API_KEY:-}
       EMILE_URL: ${EMILE_URL:-}
+      DORA_URL: ${DORA_URL:-}
       EMILE_API_KEY: ${EMILE_API_KEY:-}
       # Technique
       HTTP_TIMEOUT: ${HTTP_TIMEOUT:-}
@@ -94,6 +95,7 @@ services:
     depends_on:
       - remy
       - emile
+      - dora
 
   # Nutrition : journal des repas, profil, besoins, bilans (https://github.com/Constantin-Hentgen/Remy).
   # Aucun port publié : seul Bob lui parle, sur le réseau du stack (http://remy:8000).
@@ -120,7 +122,53 @@ services:
     volumes:
       - emile-data:/data
 
+  # Boucles de course : tracé, « jamais faite », carte et GPX (https://github.com/Constantin-Hentgen/Dora).
+  # Pas d'image publiée : construit depuis le tag Git (même version que le client dans pyproject.toml).
+  # Premier démarrage : `segments` télécharge les tuiles BRouter (~1,5 Go pour la France), puis `brouter`, puis `dora`.
+  # Disque : ~2 Go ; mémoire : ~1,5 Go de plus. Données cartographiques à rafraîchir chaque mois : recréer `segments`
+  # puis redémarrer `brouter` (wiki de Dora, « Self-hosting »).
+  dora: &dora
+    build: https://github.com/Constantin-Hentgen/Dora.git#v0.6.0
+    image: dora:0.6.0
+    container_name: dora
+    restart: unless-stopped
+    environment:
+      BROUTER_URL: http://brouter:17777/brouter
+      LOG_LEVEL: ${DORA_LOG_LEVEL:-INFO}
+    depends_on:
+      - brouter
+
+  brouter:
+    build:
+      context: https://github.com/Constantin-Hentgen/Dora.git#v0.6.0
+      dockerfile: brouter.Dockerfile
+      args:
+        BROUTER_IMAGE: ghcr.io/abrensch/brouter@sha256:fbc2a0e47e655fb20ab0005c9f5fbc60e6e45e0997092713c1b996bc7cf01711
+    image: dora-brouter:0.6.0
+    container_name: brouter
+    restart: unless-stopped
+    environment:
+      MAXTHREADS: "4"
+      JAVA_OPTS: -Xmx1024M -Xms128M -Xmn8M -DmaxRunningTime=60 -DuseRFCMimeType=false -DusePOSTRequests=false
+    volumes:
+      - dora-segments:/segments4:ro
+    depends_on:
+      segments:
+        condition: service_completed_successfully
+
+  segments:   # une fois : télécharge les tuiles BRouter, puis s'arrête
+    <<: *dora
+    container_name: dora-segments
+    command: ["dora-segments", "--ok-if-present"]
+    restart: "no"
+    depends_on: []
+    volumes:
+      - dora-segments:/segments4
+    environment:
+      SEGMENTS_BBOX: ${SEGMENTS_BBOX:--4.8,41.3,9.6,51.1}
+
 volumes:
   coach-data:
   remy-data:
   emile-data:
+  dora-segments:
