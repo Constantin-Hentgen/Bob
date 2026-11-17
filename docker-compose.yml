@@ -110,7 +110,7 @@ services:
 
   # Courses : liste, stock, boîtes, recettes, agenda courses (https://github.com/Constantin-Hentgen/Emile).
   emile:
-    image: ghcr.io/constantin-hentgen/emile:0.5.0   # même version que le client dans pyproject.toml
+    image: ghcr.io/constantin-hentgen/emile:0.6.0   # même version que le client dans pyproject.toml
     container_name: emile
     restart: unless-stopped
     environment:

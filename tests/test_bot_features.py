@@ -484,6 +484,8 @@ def test_update_stock_tool_add_remove_partial_and_report(tmp_path, monkeypatch):
     assert stock_of() == {"Riz": "1 kg", "Œufs": "2", "Pain": None, "Salade": None}
     assert next(e for e in emile_client().stock().entries if e.name == "Salade").keeps == 4
     assert tools.build_report(ledger, False) == ""                          # le stock se met à jour en silence
+    tools.tool_update_stock({"add": [{"name": "riz", "qty": "500 g", "merge": True}]}, tools.Ledger())   # racheté
+    assert stock_of()["riz"] == "1,5 kg"
 
 
 def test_eat_command_is_read_only_on_haiku_with_time_and_questions(tmp_path, monkeypatch):

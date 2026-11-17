@@ -525,7 +525,8 @@ EDIT_SHOPPING_TOOL = {
 STOCK_TOOL = {
     "name": "update_stock",
     "description": (
-        "Met à jour le stock en cuisine de l'athlète : `add` pour ce qu'il a acheté ou a déjà (même nom = remplacé), "
+        "Met à jour le stock en cuisine de l'athlète : `add` pour ce qu'il a acheté ou a déjà (même nom = remplacé, ou "
+        "ajouté à ce qui reste avec merge: true quand il en rachète), "
         "`remove` pour ce qui est fini, jeté ou utilisé (avec qty_left s'il en reste une partie). Utilise les noms exacts "
         "du stock du contexte. À appeler dès qu'il le dit, ou quand il confirme avoir cuisiné ou mangé ce que tu proposais."
     ),
@@ -536,7 +537,9 @@ STOCK_TOOL = {
                 "name": {"type": "string"}, "qty": {"type": "string", "description": "ex: « 6 », « 500 g », « 1 pot »"},
                 "keeps_days": {"type": "integer", "description": _KEEPS_DESC},
                 "boxes": {"type": "boolean", "description": "plat cuisiné rangé en boîtes (tups) : qty = nombre de boîtes, "
-                          "ex: « 2 boîtes » ; compte dans les boîtes occupées"}},
+                          "ex: « 2 boîtes » ; compte dans les boîtes occupées"},
+                "merge": {"type": "boolean", "description": "true = s'ajoute à la quantité déjà au stock (« j'ai racheté "
+                          "1 kg de riz ») ; sinon la quantité remplace l'ancienne"}},
                 "required": ["name"]}},
             "remove": {"type": "array", "items": {"type": "object", "properties": {
                 "name": {"type": "string"}, "qty_left": {"type": "string", "description": "ce qu'il en reste, si entamé "
