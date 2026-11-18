@@ -196,7 +196,6 @@ class Settings:
     briefing_time: tuple[int, int] | None
     weekly_review: tuple[int, int, int] | None
     new_dish_time: tuple[int, int, int] | None
-    pantry_check_time: tuple[int, int] | None
     shop_last_call: tuple[int, int] | None
     language: str
     nutrition_check_time: tuple[int, int] | None
@@ -261,7 +260,6 @@ class Settings:
             briefing_time=_briefing_time(_str("BRIEFING_TIME", "08:00")),
             weekly_review=_weekly_time(_str("WEEKLY_REVIEW_TIME", "sun 19:00")),
             new_dish_time=_weekly_time(_str("NEW_DISH_TIME", "sat 10:00"), "NEW_DISH_TIME"),
-            pantry_check_time=_briefing_time(_str("PANTRY_CHECK_TIME", "18:00"), "PANTRY_CHECK_TIME"),
             shop_last_call=_briefing_time(_str("SHOP_LAST_CALL", "19:30"), "SHOP_LAST_CALL"),
             nutrition_check_time=_briefing_time(_str("NUTRITION_CHECK_TIME", "22:00"), "NUTRITION_CHECK_TIME"),
             language=_language(_str("BOT_LANGUAGE")),
@@ -327,7 +325,7 @@ class Settings:
         logger.info(f"[CONFIG] fournisseur={self.llm_provider} ({self.llm_base_url or 'api.anthropic.com'}), "
                     f"modèles={self.model} (conversation) / {self.planning_model} (planification), "
                     f"fuseau={self.tz.key}, briefing={self.briefing_time}, bilan hebdo={self.weekly_review}, "
-                    f"vérification du stock={self.pantry_check_time}, questions repas={self.meal_check_times}, suggestions repas={self.eat_suggest_times}, "
+                    f"questions repas={self.meal_check_times}, suggestions repas={self.eat_suggest_times}, "
                     f"détection runs={self.activity_poll_minutes} min")
 
 

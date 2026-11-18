@@ -74,7 +74,6 @@ remy_service.client = LocalRemy(pathlib.Path(tempfile.mkdtemp()))   # le vrai Re
 local_emile = LocalEmile(pathlib.Path(tempfile.mkdtemp()), language="en")   # et le vrai Emile, foyer en anglais
 emile_service.client = local_emile
 kitchen = local_emile()
-kitchen.update_stock(add=[{"name": "Rice", "qty": "1 kg", "keeps_days": 5}])
 shopping = kitchen.create_list([{"name": "Bananas", "qty": "7", "aisle": "🥦 Fruit"}], days=7, cost_min=50, cost_max=60)
 nutrition.update_profile(weight_kg=70, height_cm=178, birth_year=1995, sex="homme")
 nutrition.log_meal("Porridge", datetime.datetime(2026, 11, 14, 8, 0, tzinfo=TZ),
@@ -86,7 +85,7 @@ daily = {"time": ["2026-11-15"], "weathercode": [61], "temperature_2m_min": [4.0
          "precipitation_sum": [2.4], "precipitation_probability_max": [80], "windspeed_10m_max": [20.0]}
 out = [commands.HELP_TEXT, *(c.description for c in commands.BOT_COMMANDS),
        commands.format_day_recap(snap, day), commands.format_nutrition(snap, nutrition.meals_since(day), day),
-       commands.format_agenda([], 7), commands.format_stock_reply(), kitchen.stock_text("prompt"), kitchen.list_text("prompt"), kitchen.stock_text("boxes"), ui.shopping_text(shopping), commands.format_goals_reply([], day),
+       commands.format_agenda([], 7), kitchen.list_text("prompt"), ui.shopping_text(shopping), commands.format_goals_reply([], day),
        commands.format_form({"tsb": {}, "acRatio": {}}, [], day),
        wa.format_notice(n, datetime.datetime(2026, 11, 14, 20, tzinfo=TZ)), weather.format_forecast([daily], ["Home"], {"Home": []}),
        ui.PROPOSAL_OUTCOME["a"], ui.MEAL_HINT, *ui.LEG_LABELS.values()]

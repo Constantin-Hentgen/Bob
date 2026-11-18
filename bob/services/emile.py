@@ -1,4 +1,4 @@
-"""Emile : liste de courses, stock de la cuisine, boîtes, recettes et agenda courses
+"""Emile : liste de courses, recettes, boîtes repas (nombre) et agenda courses
 (https://github.com/Constantin-Hentgen/Emile).
 
 `client()` renvoie le client typé d'Emile (`emile.client.Emile`) ; tout appel se fait dans `with calls():`, qui

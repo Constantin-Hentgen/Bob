@@ -243,8 +243,6 @@ class CoachBot(InfoMixin, KitchenMixin, MealsMixin, RunsMixin, JobsMixin):
                 await self._on_meal_question(update, parts[1], parts[2], int(parts[3]))
             elif parts[0] == "e":
                 await self._on_eat_again(update)
-            elif parts[0] == "k":
-                await self._on_pantry_check(update, parts[1] == "y", parts[2])
             elif parts[0] == "r":
                 await self._on_route_button(update, parts[1], parts[2], parts[3])
             else:
@@ -299,7 +297,7 @@ def build_bot() -> CoachBot:
     bot = CoachBot(app)
     handlers = {
         "plan": bot.on_agenda, "load": bot.on_form, "runs": bot.on_last_runs, "weather": bot.on_weather,
-        "goals": bot.on_goals, "memory": bot.on_memory, "list": bot.on_list, "recipes": bot.on_recipes, "eat": bot.on_eat, "stock": bot.on_stock, "meme": bot.on_meme, "nutrition": bot.on_nutrition,
+        "goals": bot.on_goals, "memory": bot.on_memory, "list": bot.on_list, "recipes": bot.on_recipes, "eat": bot.on_eat, "meme": bot.on_meme, "nutrition": bot.on_nutrition,
         "routes": bot.on_routes, "newroute": bot.on_new_route, "debrief": bot.on_debrief, "review": bot.on_review,
         "shopping": bot.on_shopping, "briefing": bot.on_briefing, "help": bot.on_help,
     }

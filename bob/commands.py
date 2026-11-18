@@ -13,7 +13,6 @@ from .config import DAYS, DAYS_LONG, TZ, settings
 from .dreeve import format_activity, weekly_volume
 from .formatting import md_escape
 from .i18n import _, decimal, plural
-from .services import emile
 
 AGENDA_DEFAULT_DAYS = 7
 AGENDA_MAX_DAYS = 45
@@ -33,8 +32,7 @@ COMMANDS = [
     ("shopping", [], _("Liste de courses selon tes objectifs (7 j, ou /shopping 3)")),
     ("list", [], _("Ta liste de courses en cours, à cocher")),
     ("recipes", [], _("Recettes en boîtes pour ta liste de courses")),
-    ("eat", [], _("Quoi manger maintenant (stock, heure, entraînement)")),
-    ("stock", [], _("Ce que tu as en cuisine")),
+    ("eat", [], _("Quoi manger maintenant (heure, entraînement)")),
     ("nutrition", ["nutri"], _("Ce que tu as mangé : calories, macros, bilan du jour et de la semaine")),
     ("routes", ["parcours"], _("2-3 boucles de course autour de chez toi ou du boulot (carte + GPX)")),
     ("newroute", [], _("Une boucle jamais courue : distance, route/nature/mixte, lieu (carte + GPX)")),
@@ -62,8 +60,7 @@ HELP_TEXT = _("""🏃 *Salut, c'est Bob* 🤖
 /shopping — liste de courses pour 7 jours selon tes objectifs sportifs et santé (/shopping 3 pour 3 jours), à cocher au magasin
 /list — réaffiche ta liste de courses en cours, à cocher
 /recipes — recettes faciles à préparer en boîtes avec ta liste (/recipes new pour en avoir d'autres)
-/eat — quoi manger maintenant : 3 idées (une rapide, une tranquille, une gourmande) selon ton stock et ton entraînement, la recette quand tu choisis
-/stock — ce que tu as en cuisine : les articles cochés sur ta liste y entrent, les plats que tu marques « mangé » ou « cuisiné » en sortent, et je te demande si les produits frais sont encore là quand ils arrivent à échéance
+/eat — quoi manger maintenant : 3 idées (une rapide, une tranquille, une gourmande) selon l'heure et ton entraînement, la recette quand tu choisis
 /briefing — briefing complet, ajuste le programme dans l'agenda
 /meme — un mème qui résume ta journée d'entraînement 😂
 /routes — 2 ou 3 boucles à la distance et au lieu de ta prochaine séance, là où tu ne croises personne : ni voitures, ni foule, ni vélos (carte + fichier GPX) ; /routes travail 8 nature pour choisir le lieu, la distance et le revêtement
@@ -74,7 +71,7 @@ HELP_TEXT = _("""🏃 *Salut, c'est Bob* 🤖
 
 Tu peux aussi m'envoyer des *vocaux* 🎙️. Quand je propose un changement, des boutons te permettent de l'appliquer.
 
-_Automatique : débrief et ressenti après chaque run, briefing chaque matin, bilan le dimanche soir, alerte météo (pluie, chaleur, vent, verglas) sur tes séances, « encore là ? » sur les produits frais du stock, des idées de plats avant les repas, « tu as mangé quoi ? » quand je n'ai aucune trace d'un repas, ton bilan nutrition chaque soir, et un plat nouveau à découvrir chaque semaine._""")
+_Automatique : débrief et ressenti après chaque run, briefing chaque matin, bilan le dimanche soir, alerte météo (pluie, chaleur, vent, verglas) sur tes séances, des idées de plats avant les repas, « tu as mangé quoi ? » quand je n'ai aucune trace d'un repas, ton bilan nutrition chaque soir, et un plat nouveau à découvrir chaque semaine._""")
 
 
 def parse_days(args: list[str], default: int = AGENDA_DEFAULT_DAYS, maximum: int = AGENDA_MAX_DAYS) -> int:
@@ -311,34 +308,33 @@ def eat_prompt(now: datetime.datetime, spontaneous: bool = False) -> str:
         intro = f"Que dois-je manger maintenant ? Il est {DAYS[now.weekday()]} {now:%d/%m %H:%M}.\n" + target
     return (
         intro +
-        "Déduis-le de mon stock (contexte), de l'heure (petit-déjeuner, déjeuner, collation, dîner), de mon entraînement "
+        "Déduis-le de l'heure (petit-déjeuner, déjeuner, collation, dîner), de mon entraînement "
         "(séance qui vient de se terminer ou qui arrive aujourd'hui ou demain matin, charge, ressentis), de mes objectifs et "
         "de ma mémoire (goûts, allergies, rassasiement).\n"
         + ("" if spontaneous else
            "Si une information change vraiment la réponse et que tu ne peux pas la déduire (combien de temps j'ai, si je "
-           "mange seul, si un produit frais ancien est encore là…), pose-moi d'abord une ou deux questions courtes et "
+           "mange seul, si j'ai un ingrédient clé…), pose-moi d'abord une ou deux questions courtes et "
            "arrête-toi là. Sinon, ") +
         "propose-moi exactement 3 plats, un par envie, et laisse-moi choisir (ne dis jamais lequel est le meilleur, "
         "sauf si je te le demande) :\n"
-        "- express : prêt en 15 min max, zéro prise de tête (une boîte prête du stock passe en premier ici) ;\n"
+        "- express : prêt en 15 min max, zéro prise de tête ;\n"
         "- chill : simple et réconfortant, 20 à 40 min tranquille ;\n"
         "- gourmand : le plat plaisir, un peu plus d'effort.\n"
         "Donne-les dans cet ordre, sans écrire le nom de l'envie ni d'émoji d'envie devant.\n"
         "Si le plat découverte de la semaine (contexte) n'est pas encore goûté, il peut être l'une des 3 options. "
         "Varie par rapport à ce qui revient souvent (contexte : variété des repas). "
-        "Pense efficacité : un plat qui se cuisine en plus grande quantité pour remplir mes boîtes libres (contexte) est "
-        "un bon choix, en restant varié avec ce qui est déjà en boîtes. "
+        "Pense efficacité : un plat qui se cuisine en plus grande quantité pour remplir quelques boîtes (contexte) est "
+        "un bon choix. "
         + ("Je peux encore passer acheter un ou deux trucs si ça vaut le coup. " if shops_open(now) else
-           "Les magasins sont fermés : uniquement des plats faisables avec ce qu'il y a en stock, rien à acheter. ") +
+           "Les magasins sont fermés : uniquement des plats faits avec des basiques du placard ou ce qui reste de ma liste de courses (contexte), rien à acheter. ") +
         "Mets un maximum d'émojis pour que je me projette : chaque plat commence par un émoji qui le symbolise, et ses "
         "ingrédients principaux ont le leur. Format : une courte phrase d'intro, puis une ligne par plat, rien d'autre :\n"
         "🌮 *Le plat* · 🥚🥔🧀 · ⏱️ temps (· 🛒 ce qu'il faut acheter, seulement s'il manque quelque chose)\n"
         "Pour chaque plat, cherche d'abord une recette de base avec search_recipe (le nom du plat seulement) : si elle "
-        "colle, simplifie-la et adapte-la à mon stock, et finis la recette par « 📖 » + son lien ; garde-la bien simple. "
+        "colle, simplifie-la, et finis la recette par « 📖 » + son lien ; garde-la bien simple. "
         "Pas de recette dans ton message : pour chaque plat, appelle propose_meal avec `mood`, `recipe` (ingrédients avec "
-        "quantités pour le repas + les boîtes à remplir, 3 à 6 étapes courtes, et combien de boîtes mettre de côté), les "
-        "ingrédients du stock qu'il consomme (`uses`) et `items` (les aliments d'UNE portion, simples, avec leur poids estimé en grammes, comme pour log_meal : le système calcule les nutriments depuis la table Ciqual ; kcal et protéines seulement si un aliment ne se décompose pas). J'aurai un bouton "
-        "par plat : quand je choisis, je reçois sa recette, ses ingrédients sortent du stock et le repas est noté. "
+        "quantités pour le repas + les boîtes à remplir, 3 à 6 étapes courtes, et combien de boîtes mettre de côté) et `items` (les aliments d'UNE portion, simples, avec leur poids estimé en grammes, comme pour log_meal : le système calcule les nutriments depuis la table Ciqual ; kcal et protéines seulement si un aliment ne se décompose pas). J'aurai un bouton "
+        "par plat : quand je choisis, je reçois sa recette et le repas est noté. "
         "Tiens compte de ce que j'ai déjà mangé aujourd'hui (repas notés). Ne modifie pas l'agenda."
     )
 
@@ -355,9 +351,9 @@ NUTRITION_CHECK_PROMPT = (
     "[Contrôle nutrition du soir] Le système a relevé ceci dans ma journée : {issues}.\n"
     "Écris-moi comme un pote qui me soutient : 1 ou 2 messages très courts, bienveillants, sans culpabiliser ni faire "
     "la leçon. Le point le plus important seulement, et une idée concrète et simple pour faire mieux demain (petit-déj, "
-    "collation…), si possible avec ce que j'ai en stock. Garde en tête le long terme : c'est la tendance qui compte. "
+    "collation…). Garde en tête le long terme : c'est la tendance qui compte. "
     "Le bilan chiffré vient de m'être envoyé : ne le répète pas. Si un repas n'a « aucune trace », demande-moi simplement "
-    "ce que j'ai mangé (mes boîtes du stock ?) plutôt que de supposer que je l'ai sauté ; si un plat est noté deux fois, "
+    "ce que j'ai mangé plutôt que de supposer que je l'ai sauté ; si un plat est noté deux fois, "
     "demande si c'est un doublon. Ne modifie rien."
 )
 
@@ -366,7 +362,7 @@ NEW_DISH_PROMPT = (
     "découvrir cette semaine : que je n'ai jamais mangé (journal), jamais proposé en découverte avant (contexte), "
     "simple (40 min max), de saison et qui colle à mes objectifs. Choisis-le pour casser ce qui revient le plus "
     "souvent. Cherche une recette de base avec search_recipe, puis appelle propose_meal avec discovery: true, `mood`, "
-    "`recipe` (finie par « 📖 » + le lien si tu t'en sers), `uses` et `items` (les aliments d'UNE portion avec leur poids estimé : le système calcule les nutriments depuis la table Ciqual ; kcal seulement si impossible). "
+    "`recipe` (finie par « 📖 » + le lien si tu t'en sers) et `items` (les aliments d'UNE portion avec leur poids estimé : le système calcule les nutriments depuis la table Ciqual ; kcal seulement si impossible). "
     "Message : 1 ou 2 lignes, comme un pote qui te fait découvrir un truc, avec l'émoji du plat. Ne modifie pas "
     "l'agenda."
 )
@@ -378,8 +374,8 @@ def recipes_prompt(lst: ShoppingList) -> str:
     covers = ", ".join(x for x in (lst.days and f"{lst.days} jours", lst.coverage) if x) or "la période prévue"
     return (
         f"Propose les recettes de ma liste de courses actuelle (elle couvre : {covers}) :\n{items}\n\n"
-        "Contraintes : faciles (30 min actives max), efficaces (cuisiner en batch pour remplir mes boîtes libres, voir "
-        "contexte : jamais plus de boîtes que celles qui sont libres à chaque session, donc des sessions courtes et "
+        "Contraintes : faciles (30 min actives max), efficaces (cuisiner en batch pour remplir mes boîtes, voir "
+        "contexte : jamais plus de boîtes que j'en ai à chaque session, donc des sessions courtes et "
         "régulières plutôt qu'une grosse), variées (pas le même plat plus de 2 repas d'affilée, protéines et féculents "
         "différents d'une boîte à l'autre), adaptées aux boîtes "
         "(se conservent 3-4 jours au frigo et se réchauffent bien, ou se congèlent), avec surtout les articles de la liste "
@@ -393,22 +389,8 @@ def recipes_prompt(lst: ShoppingList) -> str:
         "liste avec quantités, 3 à 5 étapes courtes, et pour quel moment (déjeuner, dîner, après telle séance).\n"
         "- 🥣 Petits-déjeuners et collations rapides : 2-3 lignes.\n"
         "- Une ligne pour un article de la liste non utilisé ou un ingrédient qui manquerait.\n"
-        "Pour chaque recette, appelle propose_meal (titre = nom de la recette, uses = articles de la liste ou du stock "
-        "qu'elle consomme, makes = nombre de boîtes ou portions, `items` = les aliments d'UNE portion avec leur poids estimé, le système calcule les nutriments depuis la table Ciqual ; kcal seulement si un aliment ne se décompose pas) : j'aurai un bouton « cuisiné » "
-        "qui retirera les ingrédients du stock et y mettra les boîtes.\n"
-        "Ne modifie pas l'agenda et n'appelle pas save_shopping_list."
+        "N'appelle pas propose_meal (pas de bouton pour ces recettes), ne modifie pas l'agenda et n'appelle pas save_shopping_list."
     )
-
-
-def format_stock_reply() -> str:
-    with emile.calls():
-        kitchen = emile.client()
-        entries, text = kitchen.stock().entries, kitchen.stock_text("compact")
-    if not entries:
-        return _("🥫 *Stock*\nRien d'enregistré. Coche les articles de ta liste de courses quand tu les achètes, ou "
-                 "dis-moi ce que tu as (« j'ai du riz, des œufs et du thon »).")
-    return (_("🥫 *Stock* ({count} articles)").format(count=len(entries)) + "\n" + md_escape(text)
-            + "\n\n" + _("_Pour corriger : « j'ai fini le riz », « il reste 2 œufs », « j'ai acheté du pain »._"))
 
 
 def format_goals_reply(goals: list[dict], today: datetime.date) -> str:
@@ -426,11 +408,9 @@ def shopping_prompt(days: int, today: datetime.date, save_to_calendar: bool = Fa
         "Base-toi sur : mes objectifs sportifs et de santé, mes préférences, régimes, allergies et contraintes alimentaires "
         "(mémoire) ; les séances prévues dans l'agenda sur cette période (jours durs ou longs : plus de glucides et de "
         "récupération ; jours de repos : plus léger) ; ma charge d'entraînement actuelle.\n"
-        "Tiens compte de mon stock (contexte) : n'achète pas ce que j'ai déjà en quantité suffisante, et utilise en "
-        "priorité ce qui doit être consommé vite.\n"
-        "Pense la liste autour de 4 à 6 recettes faciles et efficaces à préparer à l'avance en boîtes (batch cooking : "
+                "Pense la liste autour de 4 à 6 recettes faciles et efficaces à préparer à l'avance en boîtes (batch cooking : "
         "se conservent 3-4 jours au frigo, se réchauffent bien, ou se congèlent), variées, dimensionnées pour mes "
-        "boîtes (contexte : nombre total et libres), plus petits-déjeuners et collations "
+        "boîtes (contexte : nombre total), plus petits-déjeuners et collations "
         "simples ; je demanderai les recettes avec /recipes.\n"
         "Format Telegram, concis :\n"
         "- 1 ou 2 lignes sur la logique de la période (séances clés, jours de repos) et les recettes prévues (juste leurs noms).\n"

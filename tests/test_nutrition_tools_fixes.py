@@ -4,7 +4,6 @@ from types import SimpleNamespace
 
 import pytest
 import requests
-from emile.core.models import ListItem, ShoppingList
 from emile.schemas import RecipeOut, RecipeSearch
 
 from bob import commands, nutrition, tools
@@ -46,7 +45,7 @@ def test_run_tool_redacts_api_key(monkeypatch, caplog):
 
 def test_prompts_ask_for_items():
     now = datetime.datetime(2026, 11, 13, 12, 0)
-    for p in (commands.eat_prompt(now), commands.NEW_DISH_PROMPT, commands.recipes_prompt(ShoppingList(id=1, items=[ListItem(name="Riz")], created=now))):
+    for p in (commands.eat_prompt(now), commands.NEW_DISH_PROMPT):
         assert "`items`" in p and "Ciqual" in p
         assert "estimations (kcal" not in p
 

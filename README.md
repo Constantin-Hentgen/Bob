@@ -29,7 +29,7 @@ Bob ▸ Vas-y tranquille, t'as encore de la fatigue dans les jambes 😮‍💨
 - 📅 **Plans in your CalDAV calendar** (Radicale, Nextcloud, Baïkal, Fastmail, iCloud…), backward from your goals; every write is checked on the server
 - 🏃 **Uses your Dreeve data**: load, whole run history, a debrief and check-in after each run
 - 🌧️ **Weather alerts** per session and training place
-- 🥗 **Meals and nutrition**: meal ideas, shopping checklist, stock, food log computed from the Ciqual table
+- 🥗 **Meals and nutrition**: meal ideas, shopping checklist, food log computed from the Ciqual table
 - 🗺️ **Running loops** around home or work, as maps and GPX files
 - 🎙️ **Voice notes** transcribed locally, 🧠 **memory** of your preferences, 🌍 French or English, single-user and self-hosted
 - 🤖 **Bring your own model**: Anthropic, OpenAI, DeepSeek, Mistral, OpenRouter, Groq, Gemini, or a local Ollama / LM Studio / vLLM server

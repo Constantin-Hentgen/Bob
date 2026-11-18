@@ -8,15 +8,12 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
 from telegram.error import BadRequest
 from emile.core import render
-from emile.core.models import ShoppingList, StockEntry
-from emile.core.stock import box_count
+from emile.core.models import ShoppingList
 
 from ..formatting import bubbles, md_escape, md_unescape, split_message
 from ..memory import LEGS, store
 from ..config import settings
 from ..i18n import _
-from ..services import ServiceError
-from ..services import emile
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +75,7 @@ def without_proposal(markup: InlineKeyboardMarkup | None, pid: str) -> InlineKey
     return InlineKeyboardMarkup(rows) if rows else None
 
 
-MEAL_HINT = _("Touche un plat une fois mangé ou cuisiné 👇")
+MEAL_HINT = _("Touche un plat une fois mangé 👇")
 
 
 def has_recipe(mid) -> bool:
@@ -87,8 +84,7 @@ def has_recipe(mid) -> bool:
 
 
 def meal_rows(meals: list[tuple[int, str]]) -> list[list[InlineKeyboardButton]]:
-    """Un bouton par plat proposé : « choisir » (/eat, envoie la recette) ou « mangé / cuisiné » ; retire ses
-    ingrédients du stock, sans IA."""
+    """Un bouton par plat proposé : « choisir » (/eat, envoie la recette) ou « mangé » ; note le repas, sans IA."""
     def icon(mid) -> str:
         item = store.proposal(mid) or {}
         if item.get("mood"):   # /eat : le plat porte déjà son émoji, pas d'émoji d'envie devant
@@ -122,39 +118,23 @@ def meal_hint(meals: list[tuple[int, str]]) -> str:
 
 
 MEAL_GUESS_HOURS = 36   # un plat proposé il y a plus longtemps n'est plus un candidat crédible
-MAX_BOX_GUESSES = 4    # toutes les boîtes du stock d'abord (jusqu'à 4)
-MAX_DISH_GUESSES = 2   # puis les derniers plats proposés
+MAX_DISH_GUESSES = 2   # les derniers plats proposés
 MEAL_SLOT_WHEN = {"petit-déjeuner": _("Ce matin"), "déjeuner": _("Ce midi"), "collation": _("Cet après-midi"), "dîner": _("Ce soir")}
 
 
 def meal_guesses(now: datetime.datetime) -> list[dict]:
-    """Ce que l'athlète a probablement mangé : ses boîtes prêtes (la plus ancienne d'abord), puis les plats que le coach
-    lui a proposés récemment (le plus récent d'abord). [{text, uses, macros, box, source}]"""
-    guesses = []
-    try:   # les boîtes sont un indice : sans Emile, la question se pose avec les seuls plats proposés
-        with emile.calls():
-            stock = emile.client().stock().entries
-    except ServiceError as e:
-        logger.error(f"Boîtes non lues pour la question repas : {e}")
-        stock = []
-    for entry in sorted((e for e in stock if e.boxes), key=lambda e: e.added):
-        n = box_count(entry.qty)
-        use = {"name": entry.name, **({"qty_left": f"{n - 1} boîte{'s' if n > 2 else ''}"} if n > 1 else {})}
-        guesses.append({"text": entry.name, "uses": [use], "macros": {}, "box": True, "source": None})
+    """Ce que l'athlète a probablement mangé : les plats que le coach lui a proposés récemment (le plus récent
+    d'abord). [{text, macros, source}]"""
     cutoff = now - datetime.timedelta(hours=MEAL_GUESS_HOURS)
     recent = [(pid, item) for pid, item in store.state["proposals"].items()
               if item.get("kind") == "meal" and item["status"] == "open" and not item.get("makes")
               and not item.get("check") and datetime.datetime.fromisoformat(item["created"]) > cutoff]
+    seen, out = set(), []
     for pid, item in sorted(recent, key=lambda x: x[1]["created"], reverse=True):
-        guesses.append({"text": item["text"], "uses": item.get("uses") or [], "macros": item.get("macros") or {},
-                        "box": False, "source": pid})
-    seen, out, counts = set(), [], {True: 0, False: 0}
-    for g in guesses:
-        if g["text"].casefold() in seen or counts[g["box"]] >= (MAX_BOX_GUESSES if g["box"] else MAX_DISH_GUESSES):
+        if item["text"].casefold() in seen or len(out) >= MAX_DISH_GUESSES:
             continue
-        seen.add(g["text"].casefold())
-        counts[g["box"]] += 1
-        out.append(g)
+        seen.add(item["text"].casefold())
+        out.append({"text": item["text"], "macros": item.get("macros") or {}, "source": pid})
     return out
 
 
@@ -176,11 +156,6 @@ def without_button(markup: InlineKeyboardMarkup | None, data: str) -> InlineKeyb
     """Le même clavier sans la ligne du bouton `data` ; None s'il ne reste rien."""
     rows = [list(row) for row in (markup.inline_keyboard if markup else ()) if all(b.callback_data != data for b in row)]
     return InlineKeyboardMarkup(rows) if rows else None
-
-
-def pantry_check_markup(entries: list[StockEntry]) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([[InlineKeyboardButton(f"✅ {e.name}"[:40], callback_data=f"k:y:{e.id}"),
-                                  InlineKeyboardButton(_("🗑️ Fini"), callback_data=f"k:n:{e.id}")] for e in entries])
 
 
 def shopping_text(lst: ShoppingList) -> str:

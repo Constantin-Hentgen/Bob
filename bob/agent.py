@@ -53,27 +53,20 @@ DEUX AGENDAS, À NE PAS CONFONDRE :
 - L'agenda d'ENTRAÎNEMENT (CalDAV) : séances et repos. Tu le lis dans le contexte et avec `list_calendar_events`, tu le modifies avec les outils `*_calendar_event`. `propose_change` ne concerne QUE lui.
 - L'agenda COURSES : tu ne le lis ni ne l'écris directement. La liste de courses en cours (articles, cochés ou non, créneau) est dans le contexte ; crée une nouvelle liste avec `save_shopping_list`, modifie la liste en cours avec `edit_shopping_list` (l'événement de l'agenda courses suit automatiquement). Fais-le directement quand l'athlète le demande, sans proposition ni confirmation.
 
-STOCK EN CUISINE :
-- Le contexte donne le stock (articles cochés sur la liste de courses + ce que l'athlète a signalé), avec leur ancienneté et, pour les produits frais, la date jusqu'à laquelle ils se gardent. Ce qui arrive à échéance passe en priorité, et signale ce qui risque de ne plus être bon.
-- Chaque plat ou recette que tu proposes : appelle `propose_meal` avec les ingrédients du stock qu'il consomme. L'athlète confirme d'un bouton et le système retire lui-même ces ingrédients : ne le fais pas toi-même.
-- Dès que l'athlète dit avoir acheté, fini, jeté ou cuisiné autre chose, mets le stock à jour avec `update_stock` (retire ce qui est fini, réduis avec qty_left ce qui a été entamé, `keeps_days` pour un produit frais ajouté). Pas besoin de le lui demander.
-- Le stock est une estimation : sans info, ne suppose pas qu'un article frais ancien est encore là, demande.
-
 VARIÉTÉ :
 - Le contexte donne la variété des repas sur 14 jours et le plat découverte de la semaine. Si un plat revient trop, propose autre chose (autre protéine, autre féculent, autre cuisine), sans faire la morale.
 - Les nouveautés arrivent doucement : un seul plat découverte par semaine (le système le propose lui-même), le reste du temps des variantes de ce qu'il aime.
 
 PRÉPARATION DES REPAS (BOÎTES) :
-- L'objectif est l'efficacité : quand l'athlète cuisine, en profiter pour remplir ses boîtes (tups) libres avec les repas des prochains jours, plutôt que de cuisiner à chaque repas. Le contexte donne le nombre de boîtes occupées et libres : ne prévois jamais plus de boîtes que celles qui sont libres au moment de cuisiner.
+- L'objectif est l'efficacité : quand l'athlète cuisine, en profiter pour remplir des boîtes (tups) avec les repas des prochains jours, plutôt que de cuisiner à chaque repas. Le contexte donne le nombre de boîtes du foyer : n'en prévois jamais plus.
 - Variété toujours : pas le même plat plus de 2 repas d'affilée ; varie la protéine et le féculent d'une boîte à l'autre ; plutôt 2 plats différents qu'un seul en 3 boîtes.
-- Une boîte prête au stock passe avant tout le reste (zéro cuisine), en commençant par la plus ancienne. Quand l'athlète mange une boîte, mets le stock à jour (`log_meal` avec `uses` et qty_left = les boîtes restantes).
-- Quand l'athlète dit avoir rangé un plat en boîtes, `update_stock` avec `boxes: true` et qty = le nombre de boîtes.
+- Ce qu'il a en cuisine n'est pas suivi : ne le suppose pas, et ne le lui demande que si ça change vraiment ta proposition.
 
 JOURNAL ALIMENTAIRE :
 - Le contexte donne les repas notés aujourd'hui et hier (heure, contenu, estimations). Le système demande « qu'as-tu mangé ? » après un repas dont il n'a aucune trace.
-- Quand l'athlète dit ce qu'il a mangé (réponse à cette question ou spontanément), appelle `log_meal` pour chaque repas, à l'heure où il l'a mangé, avec tes estimations et `uses` pour ce qui sort du stock. Puis en 1 ou 2 lignes, l'essentiel seulement : est-ce adapté à son entraînement (séance du jour faite ou à venir, sortie longue ou fractionné demain, charge, objectifs santé) au vu du total de la journée, ce qui manque ou est en trop (glucides, protéines, hydratation…), et un conseil concret pour le repas suivant, tiré du stock si possible.
+- Quand l'athlète dit ce qu'il a mangé (réponse à cette question ou spontanément), appelle `log_meal` pour chaque repas, à l'heure où il l'a mangé, avec tes estimations. Puis en 1 ou 2 lignes, l'essentiel seulement : est-ce adapté à son entraînement (séance du jour faite ou à venir, sortie longue ou fractionné demain, charge, objectifs santé) au vu du total de la journée, ce qui manque ou est en trop (glucides, protéines, hydratation…), et un conseil concret pour le repas suivant.
 - Ce qui est noté doit être exactement ce qu'il a mangé. Demander une recette, la relire, en reparler ou te la faire renvoyer n'est PAS la manger : pas de `log_meal` (ni de nouveau `propose_meal` pour un plat déjà choisi : redonne simplement la recette en texte). Un plat déjà noté (n° #) ne se note pas une deuxième fois ; seulement s'il dit clairement l'avoir remangé, `log_meal` avec `again: true`.
-- « À VÉRIFIER » (calculé par le système) liste les incohérences du journal : même plat noté deux fois, deux repas complets dans le même créneau, repas principal sans trace. Ne les prends pas pour argent comptant : lève le doute en UNE question courte quand ça vient naturellement (pas si tu l'as déjà posée dans l'historique), puis corrige : `remove_meal` pour un doublon, `log_meal` pour un repas oublié. Ne suggère jamais qu'il a sauté un repas : pour un repas sans trace, demande ce qu'il a mangé en proposant ses boîtes du stock. S'il dit lui-même ne pas avoir mangé, note « rien (<repas> sauté) » avec kcal 0.
+- « À VÉRIFIER » (calculé par le système) liste les incohérences du journal : même plat noté deux fois, deux repas complets dans le même créneau, repas principal sans trace. Ne les prends pas pour argent comptant : lève le doute en UNE question courte quand ça vient naturellement (pas si tu l'as déjà posée dans l'historique), puis corrige : `remove_meal` pour un doublon, `log_meal` pour un repas oublié. Ne suggère jamais qu'il a sauté un repas : pour un repas sans trace, demande ce qu'il a mangé. S'il dit lui-même ne pas avoir mangé, note « rien (<repas> sauté) » avec kcal 0.
 - Estimations approximatives : ne fais pas de comptabilité, repère les écarts nets (séance dure sans glucides, journée très en dessous des besoins, peu de protéines en récupération).
 
 RESSENTI APRÈS SÉANCE :
@@ -127,7 +120,7 @@ STYLE DE CONVERSATION (une discussion par messages, comme entre deux personnes, 
 - Un plan (plusieurs séances) : une ligne par séance, rien de plus.
 - Une seule question à la fois, à la fin, et seulement si la réponse change vraiment ce que tu vas faire.
 - Jamais d'UID, d'identifiant technique ni de nom d'outil dans tes réponses. N'écris jamais un appel d'outil en texte (« [propose_meal: …] ») : ça n'exécute rien, appelle l'outil.
-- Pas de ton de journal de bord : ne raconte pas ce que tu as noté, retenu, enregistré ou mis à jour (repas, stock, mémoire, objectifs) et n'écris jamais « Noté : … ». Fais-le en silence ; n'en parle que si ça change quelque chose pour lui (« c'était ta dernière boîte de chili »). Les notes « [Note système…] » de l'historique sont pour toi, pas à recopier.
+- Pas de ton de journal de bord : ne raconte pas ce que tu as noté, retenu, enregistré ou mis à jour (repas, mémoire, objectifs) et n'écris jamais « Noté : … ». Fais-le en silence ; n'en parle que si ça change quelque chose pour lui (« ça fait 3 jours de suite que tu manges des pâtes »). Les notes « [Note système…] » de l'historique sont pour toi, pas à recopier.
 - Émojis comme un Français de 25 ans qui écrit à un pote : naturels, 0 à 2 par message, souvent en fin de phrase (😂 🙌 🔥 💪 😅 👌 🫡 🥲 😮‍💨 🤤), jamais en puces décoratives ni en titre.
 - Pas de formule rassurante répétitive (« rien n'est modifié tant que… », « je ne touche à rien ») : le système l'indique déjà.
 - Pas de tics : ne réutilise pas les mêmes formules ni le même émoji d'un message à l'autre (« c'est noté », « bon choix », « ça passe », « c'est calé », 👌). 👌 au plus une fois par conversation ; « noté », « c'est noté », « bien noté » jamais : quand il te donne une info, réagis à ce qu'elle change, ou ne dis rien de plus que la suite utile.
@@ -217,7 +210,7 @@ def too_long(text: str) -> bool:
 # message, réflexion à voix haute. Le prompt les interdit, mais un petit modèle y retombe : une réécriture, sans outil.
 TICS = {
     "journal de bord": re.compile(
-        r"(?:^|[.!?\n]\s*)(?:ok,?\s*)?not[ée]e?s?\b|\b(?:c['’]est|bien|c['’]est bien) not[ée]e?s?\b|\b(?:retiré|ajouté|enlevé|décompté)e?s? (?:du|au|de ton|à ton) stock"
+        r"(?:^|[.!?\n]\s*)(?:ok,?\s*)?not[ée]e?s?\b|\b(?:c['’]est|bien|c['’]est bien) not[ée]e?s?\b"
         r"|\bj['’]ai (?:bien )?(?:noté|enregistré|mis à jour|corrigé|retiré|ajouté) (?:ton|ta|tes|le|la|les|ça)\b", re.I),
     "mécanique interne": re.compile(
         r"\bde mon côté\b|\bje n['’]ai (?:pas|plus) (?:de moyen|accès|le moyen|en mémoire)|\bje ne l['’]ai plus en mémoire"
@@ -284,7 +277,7 @@ def history_note(ledger: Ledger, truncated: bool, error: str | None) -> str:
     return f"[Note système, ne pas recopier : {' ; '.join(done)}]" if done else ""
 
 
-# Vocabulaire d'agenda : une phrase qui parle de stock, de repas ou de courses (alimentaires) n'est pas une promesse d'agenda.
+# Vocabulaire d'agenda : une phrase qui parle de repas ou de courses (alimentaires) n'est pas une promesse d'agenda.
 CALENDAR_WORDS = re.compile(
     r"\b(?:agenda|calendrier|séances?|sorties?|footing|fractionné|entra[iî]nements?|renfo|renforcement|runs?|"
     r"course à pied|seuil|allure spécifique|calendar|sessions?|workouts?|training|tempo|intervals|long run)\b", re.I)
@@ -363,18 +356,18 @@ def _nutrition_context(runs: list[dict], now: datetime.datetime) -> tuple[str, s
             coaching.meal_variety(meals, today), coaching.discovery_context(store.discoveries, week, today))
 
 
-def _kitchen_context() -> tuple[str, str, str]:
-    """Stock, boîtes repas et liste de courses en cours, en texte prêt pour le modèle, lus chez Emile. Emile injoignable :
-    le coach le sait et ne prétend rien enregistrer."""
+def _kitchen_context() -> tuple[str, str]:
+    """Nombre de boîtes repas du foyer et liste de courses en cours, en texte prêt pour le modèle, lus chez Emile.
+    Emile injoignable : le coach le sait et ne prétend rien enregistrer."""
     try:
         with emile.calls():
             kitchen = emile.client()
-            return kitchen.stock_text("prompt"), kitchen.stock_text("boxes"), kitchen.list_text("prompt")
+            return f"{kitchen.household().meal_boxes} au total", kitchen.list_text("prompt")
     except ServiceError as e:
         logger.error(f"Cuisine indisponible : {e}")
-        off = (f"INDISPONIBLE ({e.service} ne répond pas : {e.detail}). Ni le stock ni la liste de courses ne peuvent "
-               "être lus ou modifiés pour l'instant : dis-le simplement si on t'en parle.")
-        return off, off, off
+        off = (f"INDISPONIBLE ({e.service} ne répond pas : {e.detail}). La liste de courses ne peut pas "
+               "être lue ou modifiée pour l'instant : dis-le simplement si on t'en parle.")
+        return off, off
 
 
 async def _gather_context() -> str:
@@ -408,13 +401,12 @@ async def _gather_context() -> str:
 
     now = datetime.datetime.now(TZ)
     meals_text, energy_text, variety_text, discovery_text = await asyncio.to_thread(_nutrition_context, all_runs, now)
-    stock_text, boxes_text, shopping_text = await asyncio.to_thread(_kitchen_context)
+    boxes_text, shopping_text = await asyncio.to_thread(_kitchen_context)
     return (
         "DONNÉES EN TEMPS RÉEL DU SYSTÈME :\n"
         f"- Date et heure actuelles : {DAYS_LONG[now.weekday()]} {now:%d/%m/%Y %H:%M} ({TZ_LABEL})\n"
         f"- Objectifs (compte à rebours) :\n{coaching.goals_context(store.goals, now.date())}\n"
         f"- Ressentis après séance (14 derniers jours) :\n{coaching.checkins_context(store.recent_checkins(14, now.date()))}\n"
-        f"- Stock en cuisine :\n{stock_text}\n"
         f"- Boîtes repas (tups) : {boxes_text}\n"
         f"- Repas notés :\n{meals_text}\n"
         f"- Bilan nutritionnel (calculé par le système, table Ciqual) :\n{energy_text}\n"

@@ -20,16 +20,8 @@ def log_meal(text, at, **values):
 
 
 def emile_client():
-    """Le client d'Emile (l'Emile local de conftest.py), pour préparer ou vérifier le stock et la liste."""
+    """Le client d'Emile (l'Emile local de conftest.py), pour préparer ou vérifier la liste."""
     return emile_service.client()
-
-
-def stock_of():
-    return {e.name: e.qty for e in emile_client().stock().entries}
-
-
-def seed_stock(*items):
-    emile_client().update_stock(add=list(items))
 
 
 def _patch_bot(monkeypatch, name, value):
@@ -378,12 +370,11 @@ def test_shopping_checklist_toggle_and_replacement(tmp_path, monkeypatch):
     q = asyncio.run(tap(f"s:t:{lst.id}:0"))
     new_text, new_markup = q.edits[-1]
     assert "1/2 ✅" in new_text and ("✅ Bananes — 7", f"s:t:{lst.id}:0") in _buttons(new_markup)
-    assert stock_of() == {"Bananes": "7"}                      # coché = acheté : l'article entre au stock
 
     q = asyncio.run(tap(f"s:t:{lst.id}:1"))
     assert "tout est dans le panier" in q.edits[-1][0]
     asyncio.run(tap(f"s:r:{lst.id}"))
-    assert not any(i.done for i in emile_client().current_list().items) and not stock_of()
+    assert not any(i.done for i in emile_client().current_list().items)
 
     # Une nouvelle liste remplace l'ancienne : les anciens boutons ne font plus rien
     emile_client().create_list([{"name": "Œufs"}])
@@ -472,21 +463,7 @@ def test_recipes_generated_once_then_cached_and_regenerated_on_demand(tmp_path, 
     assert len(asked) == 2
 
 
-# --- Stock en cuisine et /eat ----------------------------------------------------
-
-def test_update_stock_tool_add_remove_partial_and_report(tmp_path, monkeypatch):
-    from bob import tools
-    seed_stock({"name": "Riz", "qty": "1 kg"}, {"name": "Œufs", "qty": "6"}, {"name": "Cabillaud"})
-    ledger = tools.Ledger()
-    out = tools.tool_update_stock({"add": [{"name": "Pain"}, {"name": "Salade", "keeps_days": 4}], "remove": [
-        {"name": "cabillaud"}, {"name": "Œufs", "qty_left": "2"}, {"name": "Pâtes"}]}, ledger)
-    assert out["removed"] == ["Cabillaud"] and out["updated"] == ["Œufs (2)"] and out["not_found"] == ["Pâtes"]
-    assert stock_of() == {"Riz": "1 kg", "Œufs": "2", "Pain": None, "Salade": None}
-    assert next(e for e in emile_client().stock().entries if e.name == "Salade").keeps == 4
-    assert tools.build_report(ledger, False) == ""                          # le stock se met à jour en silence
-    tools.tool_update_stock({"add": [{"name": "riz", "qty": "500 g", "merge": True}]}, tools.Ledger())   # racheté
-    assert stock_of()["riz"] == "1,5 kg"
-
+# --- /eat ----------------------------------------------------
 
 def test_eat_command_is_read_only_on_haiku_with_time_and_questions(tmp_path, monkeypatch):
     b, store = _bot(tmp_path, monkeypatch)
@@ -506,14 +483,14 @@ def test_eat_command_is_read_only_on_haiku_with_time_and_questions(tmp_path, mon
     asyncio.run(b.on_eat(update, NS(args=[])))
     (prompt, allow_writes, planning), = calls
     assert allow_writes is False and planning is False
-    assert "Que dois-je manger maintenant ? Il est " in prompt and "stock" in prompt and "questions" in prompt
+    assert "Que dois-je manger maintenant ? Il est " in prompt and "stock" not in prompt and "questions" in prompt
     prompt = commands.eat_prompt(datetime.datetime(2026, 11, 9, 12, 30))
     assert "lun 09/11 12:30" in prompt and "acheter" in prompt and "update" not in prompt.lower().replace("mettre à jour", "")
 
 
 # --- Modification de la liste en cours ------------------------------------------------
 
-def test_edit_shopping_list_checks_removes_adds_and_feeds_the_stock(tmp_path, monkeypatch):
+def test_edit_shopping_list_checks_removes_adds(tmp_path, monkeypatch):
     from bob import tools
     lst = emile_client().create_list([{"name": "Bananes", "qty": "7"}, {"name": "Riz"}, {"name": "Œufs", "qty": "6"},
                                  {"name": "Thon en boîte"}], days=7)
@@ -526,20 +503,18 @@ def test_edit_shopping_list_checks_removes_adds_and_feeds_the_stock(tmp_path, mo
     assert [(i.name, i.done) for i in new.items] == [("Bananes", True), ("Œufs", True), ("Thon en boîte", True), ("Pain", False)]
     assert out["removed"] == ["Riz"] and out["added"] == ["Pain"] and out["not_found"] == ["Pâtes"]
     assert new.id != lst.id and new.days == 7
-    assert sorted(stock_of()) == ["Bananes", "Thon en boîte", "Œufs"]         # cochés = au stock
     assert [a.detail for a in ledger.actions if a.kind == "shopping"] == [str(new.id)]
     assert tools.build_report(ledger, False) == ""
 
 
 def test_kitchen_is_in_the_coach_context(tmp_path):
-    assert agent._kitchen_context() == ("vide", "0/3 occupées → 3 libre(s)", "aucune")
+    assert agent._kitchen_context() == ("3 au total", "aucune")
     lst = emile_client().create_list([{"name": "Bananes", "qty": "7", "aisle": "🥦 Fruits"}, {"name": "Riz"}], days=7)
     emile_client().toggle(lst.id, 0)
-    emile_client().update_stock(add=[{"name": "Chili", "qty": "2 boîtes", "boxes": True}])
-    stock, boxes, shopping = agent._kitchen_context()
-    assert "- Bananes (7) — acheté aujourd'hui" in stock and "- Chili (2 boîtes) — acheté aujourd'hui" in stock
-    assert boxes == "2/3 occupées (Chili ×2) → 1 libre(s)"
+    boxes, shopping = agent._kitchen_context()
+    assert boxes == "3 au total"
     assert shopping.startswith("(2 articles, 1 achetés, couvre 7 jours)") and "- ✅ Bananes (7) [🥦 Fruits]\n- ☐ Riz" in shopping
+    assert "Stock" not in agent.SYSTEM_PROMPT and "update_stock" not in agent.SYSTEM_PROMPT
 
 
 def test_coach_says_so_when_the_kitchen_does_not_answer(tmp_path, monkeypatch):
@@ -552,7 +527,7 @@ def test_coach_says_so_when_the_kitchen_does_not_answer(tmp_path, monkeypatch):
     monkeypatch.setattr(emile_service, "client", down)
     assert all(text.startswith("INDISPONIBLE (Emile") for text in agent._kitchen_context())
     ledger = tools.Ledger()
-    out = tools.run_tool("update_stock", {"add": [{"name": "Riz"}]}, ledger, {"update_stock"})
+    out = tools.run_tool("edit_shopping_list", {"check": ["Riz"]}, ledger, {"edit_shopping_list"})
     assert out["ok"] is False and "Emile" in out["error"] and not ledger.actions   # jamais « noté » à tort
 
 
@@ -562,55 +537,53 @@ def test_edit_without_list_fails_cleanly(tmp_path):
     assert out["ok"] is False and "NotFound" in out["error"]
 
 
-# --- Plats mangés / cuisinés et péremption du stock ------------------------------------
+# --- Plats mangés ------------------------------------
 
-def test_propose_meal_tool_records_a_meal_with_its_ingredients(tmp_path, monkeypatch):
+def test_propose_meal_tool_records_a_meal(tmp_path, monkeypatch):
     import pytest
     from bob import tools
     store = Store(tmp_path / "s.json")
     monkeypatch.setattr(tools, "store", store)
     ledger = tools.Ledger()
-    out = tools.tool_propose_meal({"title": "Bowl saumon riz", "uses": [
-        {"name": "Saumon"}, {"name": "Riz", "qty_left": "700 g"}, {"name": " "}]}, ledger)
+    out = tools.tool_propose_meal({"title": "Bowl saumon riz", "kcal": 650}, ledger)
     meal = store.proposal(out["meal_id"])
-    assert meal["kind"] == "meal" and meal["text"] == "Bowl saumon riz"
-    assert meal["uses"] == [{"name": "Saumon"}, {"name": "Riz", "qty_left": "700 g"}]
+    assert meal["kind"] == "meal" and meal["text"] == "Bowl saumon riz" and "uses" not in meal and "makes" not in meal
     assert [(a.kind, a.label, a.detail) for a in ledger.actions] == [("meal", "Bowl saumon riz", str(out["meal_id"]))]
     with pytest.raises(ValueError):
-        tools.tool_propose_meal({"title": "Rien", "uses": []}, ledger)
-    assert "propose_meal" in {t["name"] for t in tools.READ_ONLY_TOOLS}   # /eat et /recipes sont en lecture seule
+        tools.tool_propose_meal({"title": " "}, ledger)
+    assert "propose_meal" in {t["name"] for t in tools.READ_ONLY_TOOLS}   # /eat est en lecture seule
+    names = {t["name"] for t in tools.READ_ONLY_TOOLS} | {t["name"] for t in tools.ALL_TOOLS}
+    assert "update_stock" not in names
+    schemas = {t["name"]: t["input_schema"]["properties"] for t in tools.ALL_TOOLS}
+    assert not {"uses", "makes"} & set(schemas["propose_meal"]) and "uses" not in schemas["log_meal"]
 
 
-def test_meal_button_removes_ingredients_once(tmp_path, monkeypatch):
+def test_meal_button_logs_the_meal_once(tmp_path, monkeypatch):
     b, store = _bot(tmp_path, monkeypatch)
-    seed_stock({"name": "Saumon", "qty": "2 pavés"}, {"name": "Riz", "qty": "1 kg"}, {"name": "Pain"})
-    mid = store.add_proposal("Bowl saumon riz", kind="meal",
-                             uses=[{"name": "saumon"}, {"name": "Riz", "qty_left": "700 g"}, {"name": "Avocat"}])
-    other = store.add_proposal("Tartines", kind="meal", uses=[{"name": "Pain"}])
+    mid = store.add_proposal("Bowl saumon riz", kind="meal", macros={"kcal": 650})
+    other = store.add_proposal("Tartines", kind="meal", macros={})
     asyncio.run(b._deliver(agent.AgentReply("Voici le plat", meals=[(mid, "Bowl saumon riz"), (other, "Tartines")])))
     text, markup = b.sent[-1]
-    assert "Touche un plat" in text
+    assert "Touche un plat une fois mangé 👇" in text
     assert _buttons(markup) == [("✅ Bowl saumon riz", f"m:{mid}"), ("✅ Tartines", f"m:{other}")]
 
     q = _click(b, f"m:{mid}", markup)
-    assert stock_of() == {"Riz": "700 g", "Pain": None}
     assert _buttons(q.edits[-1][1]) == [("✅ Tartines", f"m:{other}")]        # seul le bouton touché disparaît
-    assert b.sent[-1][0].strip() == "Bon app' 😋"                               # pas de détail du stock
+    assert b.sent[-1][0].strip() == "Bon app' 😋"
+    (meal,) = nutrition.meals_since(datetime.date.today() - datetime.timedelta(days=30))
+    assert meal["text"] == "Bowl saumon riz" and meal["kcal"] == 650 and meal["source"] == "bouton"
     assert _click(b, f"m:{mid}").answers == ["Déjà noté."]                    # double clic sans effet
-    assert set(stock_of()) == {"Riz", "Pain"}
-    assert _click(b, f"m:{other}", without := bot_module.without_button(markup, f"m:{mid}")).edits[-1] == ("markup", None)
-    assert without is not None and list(stock_of()) == ["Riz"]
+    assert len(nutrition.meals_since(datetime.date.today() - datetime.timedelta(days=30))) == 1
 
 
-def test_eat_choice_sends_the_recipe_updates_stock_and_drops_other_dishes(tmp_path, monkeypatch):
+def test_eat_choice_sends_the_recipe_and_drops_other_dishes(tmp_path, monkeypatch):
     from bob import tools
     b, store = _bot(tmp_path, monkeypatch)
     monkeypatch.setattr(tools, "store", store)
-    seed_stock({"name": "Pâtes", "qty": "500 g"}, {"name": "Thon"})
     ledger = tools.Ledger()
-    pasta = tools.tool_propose_meal({"title": "Pâtes au thon", "kcal": 700, "recipe": "1. Cuire les pâtes\n2. Ajouter le thon",
-                                     "uses": [{"name": "Pâtes", "qty_left": "350 g"}, {"name": "Thon"}]}, ledger)["meal_id"]
-    omelette = tools.tool_propose_meal({"title": "Omelette", "recipe": "🛒 Œufs\n1. Battre", "uses": []}, ledger)["meal_id"]
+    pasta = tools.tool_propose_meal({"title": "Pâtes au thon", "kcal": 700, "recipe": "1. Cuire les pâtes\n2. Ajouter le thon"},
+                                    ledger)["meal_id"]
+    omelette = tools.tool_propose_meal({"title": "Omelette", "recipe": "🛒 Œufs\n1. Battre"}, ledger)["meal_id"]
     asyncio.run(b._deliver(agent.AgentReply("Deux idées", meals=[(pasta, "Pâtes au thon"), (omelette, "Omelette")])))
     text, markup = b.sent[-1]
     assert text.strip() == "Deux idées" and "Cuire" not in text            # boutons sur le message ; recette au choix
@@ -618,20 +591,18 @@ def test_eat_choice_sends_the_recipe_updates_stock_and_drops_other_dishes(tmp_pa
 
     q = _click(b, f"m:{pasta}", markup)
     assert q.edits[-1] == ("markup", None)                                    # les autres plats tombent
-    assert "Pâtes au thon" in b.sent[-1][0] and "1. Cuire les pâtes" in b.sent[-1][0] and "Stock" not in b.sent[-1][0]
-    assert stock_of() == {"Pâtes": "350 g"}
+    assert b.sent[-1][0].startswith("Bon choix 😋 *Pâtes au thon*, voilà comment faire :") and "1. Cuire les pâtes" in b.sent[-1][0]
     assert [m["kcal"] for m in nutrition.meals_since(datetime.date.today() - datetime.timedelta(days=30))] == [700]
     assert _click(b, f"m:{omelette}").answers == ["Déjà noté."]
 
 
-def test_recipes_keep_their_cooked_buttons_when_redisplayed(tmp_path, monkeypatch):
+def test_recipes_come_without_buttons(tmp_path, monkeypatch):
     b, store = _bot(tmp_path, monkeypatch)
-    lst = emile_client().create_list([{"name": "Poulet", "keeps": 3}])
-    mid = store.add_proposal("Curry de poulet", kind="meal", uses=[{"name": "Poulet"}])
+    lst = emile_client().create_list([{"name": "Poulet"}])
 
     async def fake_ask(prompt, chat_id, allow_writes=True, planning=False):
-        assert "propose_meal" in prompt
-        return agent.AgentReply("🗓️ Recettes", meals=[(mid, "Curry de poulet")])
+        assert "N'appelle pas propose_meal" in prompt and "stock" not in prompt
+        return agent.AgentReply("🗓️ Recettes")
 
     monkeypatch.setattr(bot_module.agent, "ask", fake_ask)
     replies = []
@@ -642,67 +613,10 @@ def test_recipes_keep_their_cooked_buttons_when_redisplayed(tmp_path, monkeypatc
     update = NS(message=NS(reply_text=reply_text), effective_message=NS(reply_text=reply_text),
                 effective_chat=NS(id=42, send_action=_noop))
     asyncio.run(b.on_recipes(update, NS(args=[])))
-    assert emile_client().current_list().recipe_meals == [mid]
-    asyncio.run(b.on_recipes(update, NS(args=[])))                          # réaffichage sans IA, boutons compris
-    assert replies[-1][0].startswith("🗓️ Recettes") and _buttons(replies[-1][1]) == [("✅ Curry de poulet", f"m:{mid}")]
-    store.close_proposal(mid, "applied")
-    asyncio.run(b.on_recipes(update, NS(args=[])))
-    assert replies[-1][0].strip() == "🗓️ Recettes" and replies[-1][1] is None   # déjà cuisiné : plus de bouton
+    assert emile_client().current_list().recipe_meals == []
+    asyncio.run(b.on_recipes(update, NS(args=[])))                          # réaffichage sans IA, sans bouton
+    assert replies[-1][0].strip() == "🗓️ Recettes" and replies[-1][1] is None
     assert lst.id == emile_client().current_list().id
-
-
-def test_daily_pantry_check_asks_then_expires(tmp_path, monkeypatch, emile):
-    b, store = _bot(tmp_path, monkeypatch)
-
-    def on(day):   # l'horloge d'Emile (le coach n'envoie jamais de date : c'est « aujourd'hui » pour le foyer)
-        emile()
-        emile.app.state.clock = lambda: datetime.datetime(2026, 11, day, 17, 0, tzinfo=datetime.timezone.utc)
-
-    on(7)   # achetés il y a 3 jours
-    seed_stock({"name": "Saumon", "qty": "300 g", "keeps_days": 2}, {"name": "Brocoli", "keeps_days": 2},
-               {"name": "Riz"}, {"name": "Yaourts", "keeps_days": 10})
-    ids = {e.name: e.id for e in emile_client().stock().entries}
-
-    class Day(datetime.datetime):
-        @classmethod
-        def now(cls, tz=None):
-            return datetime.datetime(2026, 11, 10, 18, 0, tzinfo=tz)
-
-    monkeypatch.setattr(bot_module.datetime, "datetime", Day)
-    on(10)
-    asyncio.run(b.check_pantry())
-    text, markup = b.sent[-1]
-    assert "Encore là ?" in text and "- Saumon (300 g) · acheté il y a 3 j" in text and "Riz" not in text
-    assert _buttons(markup) == [("✅ Saumon", f"k:y:{ids['Saumon']}"), ("🗑️ Fini", f"k:n:{ids['Saumon']}"),
-                                ("✅ Brocoli", f"k:y:{ids['Brocoli']}"), ("🗑️ Fini", f"k:n:{ids['Brocoli']}")]
-    assert "à vérifier" in emile_client().stock_text("prompt")
-    n = len(b.sent)
-    asyncio.run(b.check_pantry())                                            # déjà demandé : pas de relance
-    assert len(b.sent) == n
-
-    q = _click(b, f"k:y:{ids['Saumon']}", markup)                            # encore là : date repoussée
-    saumon = next(e for e in emile_client().stock().entries if e.name == "Saumon")
-    assert saumon.due == datetime.date(2026, 11, 11) and saumon.asked is None and "encore là" in q.answers[-1]
-    left = q.edits[-1][1]
-    assert _buttons(left) == [("✅ Brocoli", f"k:y:{ids['Brocoli']}"), ("🗑️ Fini", f"k:n:{ids['Brocoli']}")]
-    q = _click(b, f"k:n:{ids['Brocoli']}", left)                             # fini : retiré, message clos
-    assert "Brocoli" not in stock_of() and q.edits[-1] == ("Merci 🙏", None)
-    assert _click(b, f"k:n:{ids['Brocoli']}").answers == ["Déjà retiré du stock."]
-
-    # Sans réponse 3 jours après la question : retiré automatiquement
-    emile_client().mark_asked([ids["Saumon"]], datetime.date(2026, 11, 10))
-    Day.now = classmethod(lambda cls, tz=None: datetime.datetime(2026, 11, 13, 18, 0, tzinfo=tz))
-    on(13)
-    asyncio.run(b.check_pantry())
-    assert "Retirés du stock (pas de réponse) : Saumon" in b.sent[-1][0]
-    assert set(stock_of()) == {"Riz", "Yaourts"}
-def test_pantry_check_time_setting(monkeypatch):
-    from bob import config
-    assert config._briefing_time("18:30", "PANTRY_CHECK_TIME") == (18, 30)
-    assert config._briefing_time("off", "PANTRY_CHECK_TIME") is None
-    import pytest
-    with pytest.raises(ValueError, match="PANTRY_CHECK_TIME"):
-        config._briefing_time("soir", "PANTRY_CHECK_TIME")
 
 
 # --- Journal alimentaire et « qu'as-tu mangé ? » -------------------------------------
@@ -720,16 +634,14 @@ def test_meal_windows_and_slots():
     assert config._meal_times("21:30, 10:30") == [(10, 30), (21, 30)] and config._meal_times("off") == []
 
 
-def test_log_meal_tool_logs_updates_stock_and_reports(tmp_path, monkeypatch):
+def test_log_meal_tool_logs_and_reports(tmp_path, monkeypatch):
     import pytest
     from bob import tools
-    seed_stock({"name": "Curry de poulet", "qty": "4 boîtes"}, {"name": "Pommes", "qty": "6"})
     ledger = tools.Ledger()
     out = tools.tool_log_meal({"description": "Curry de poulet (1 boîte) + pomme", "time": "2026-11-10T12:45:00",
-                               "kcal": 720, "protein_g": "42", "carbs_g": 85.4,
-                               "uses": [{"name": "Curry de poulet", "qty_left": "3 boîtes"}, {"name": "Pommes", "qty_left": "5"}]}, ledger)
+                               "kcal": 720, "protein_g": "42", "carbs_g": 85.4}, ledger)
     assert out["logged"]["time"] == "12:45" and out["logged"]["protein_g"] == 42 and out["logged"]["carbs_g"] == 85
-    assert stock_of() == {"Curry de poulet": "3 boîtes", "Pommes": "5"}
+    assert "stock" not in out
     report = tools.build_report(ledger, False)
     assert report == ""
     with pytest.raises(ValueError):
@@ -739,22 +651,6 @@ def test_log_meal_tool_logs_updates_stock_and_reports(tmp_path, monkeypatch):
     assert "hier (mar 10/11) :\n- #1 12:45 Curry de poulet (1 boîte) + pomme (~720 kcal, P 42 g, G 85 g)" in ctx
     assert "aujourd'hui (mer 11/11) :\n- #2 07:30 Porridge banane (~450 kcal, P 15 g)\n  total estimé : ~450 kcal, P 15 g" in ctx
     assert {"log_meal", "propose_meal"} <= {t["name"] for t in tools.READ_ONLY_TOOLS}
-
-
-def test_eaten_button_logs_the_meal_and_cooked_button_stocks_boxes(tmp_path, monkeypatch):
-    b, store = _bot(tmp_path, monkeypatch)
-    seed_stock({"name": "Saumon"}, {"name": "Poulet"}, {"name": "Riz", "qty": "1 kg"})
-    eaten = store.add_proposal("Bowl saumon", kind="meal", uses=[{"name": "Saumon"}], makes=None,
-                               macros={"kcal": 650, "protein_g": 40, "carbs_g": None})
-    cooked = store.add_proposal("Curry de poulet", kind="meal", uses=[{"name": "Poulet"}, {"name": "Riz", "qty_left": "600 g"}],
-                                makes="4 boîtes", macros={})
-    _click(b, f"m:{eaten}")
-    (meal,) = nutrition.meals_since(datetime.date.today() - datetime.timedelta(days=30))
-    assert meal["text"] == "Bowl saumon" and meal["kcal"] == 650 and meal["source"] == "bouton"
-    _click(b, f"m:{cooked}")
-    assert b.sent[-1][0].strip() == "Top, 4 boîtes de côté pour les prochains jours 🙌"
-    assert stock_of() == {"Riz": "600 g", "Curry de poulet": "4 boîtes"}
-    assert len(nutrition.meals_since(datetime.date.today() - datetime.timedelta(days=30))) == 1                # cuisiné ≠ mangé
 
 
 def _at(monkeypatch, hour, minute, day=11):
@@ -795,33 +691,7 @@ def test_meal_question_only_without_any_trace_and_once(tmp_path, monkeypatch):
     assert nutrition.meal_check("2026-11-11 dîner") == "skipped" and b.sent[-1][0].strip() == "Ok 👌"
 
 
-# --- Boîtes (tups) -------------------------------------------------------------------
-
-def test_boxes_are_counted_from_cooked_dishes_and_shrink_when_eaten(tmp_path, monkeypatch):
-    from bob import tools
-    b, store = _bot(tmp_path, monkeypatch)
-    seed_stock({"name": "Poulet"}, {"name": "Riz", "qty": "1 kg"})
-    boxes = lambda: emile_client().stock_text("boxes")   # noqa: E731
-    assert boxes() == "0/3 occupées → 3 libre(s)"
-    cooked = store.add_proposal("Curry de poulet", kind="meal", uses=[{"name": "Poulet"}], makes="2 boîtes", macros={})
-    _click(b, f"m:{cooked}")
-    assert boxes() == "2/3 occupées (Curry de poulet ×2) → 1 libre(s)"
-    tools.tool_log_meal({"description": "Curry (1 boîte)", "uses": [{"name": "Curry de poulet", "qty_left": "1 boîte"}]},
-                        tools.Ledger())
-    assert boxes() == "1/3 occupées (Curry de poulet ×1) → 2 libre(s)"
-    tools.tool_update_stock({"add": [{"name": "Chili", "qty": "2 boîtes", "boxes": True}]}, tools.Ledger())
-    assert boxes() == "3/3 occupées (Curry de poulet ×1, Chili ×2) → 0 libre(s)"
-
-
-def test_a_dish_cannot_need_more_boxes_than_owned(tmp_path, monkeypatch):
-    import pytest
-    from bob import tools
-    monkeypatch.setattr(tools, "store", Store(tmp_path / "s.json"))
-    with pytest.raises(ValueError, match="3 boîtes"):
-        tools.tool_propose_meal({"title": "Lasagnes", "makes": "6 boîtes", "uses": [{"name": "Pâtes"}]}, tools.Ledger())
-    assert tools.tool_propose_meal({"title": "Lasagnes", "makes": "3 boîtes", "uses": [{"name": "Pâtes"}]},
-                                   tools.Ledger())["ok"]
-
+# --- Boîtes (tups) : préparation des repas -------------------------------------------------------------------
 
 def test_meal_prep_prompts_aim_at_filling_free_boxes_with_variety():
     for prompt in (commands.eat_prompt(datetime.datetime(2026, 11, 9, 12, 30)),
@@ -907,54 +777,35 @@ def test_proactive_messages_reach_send_message_with_bound_chat_id(tmp_path, monk
 
 
 
-def test_meal_question_guesses_boxes_and_suggested_dishes_one_tap(tmp_path, monkeypatch):
+def test_meal_question_guesses_suggested_dishes_one_tap(tmp_path, monkeypatch):
     import dataclasses
     b, store = _bot(tmp_path, monkeypatch)
     _patch_bot(monkeypatch, "settings",
                         dataclasses.replace(bot_module.settings, meal_check_times=[(10, 30), (14, 30), (21, 30)]))
-    seed_stock({"name": "Chili", "qty": "2 boîtes", "boxes": True}, {"name": "Thon", "qty": "2 boîtes"})
-    suggested = store.add_proposal("Pâtes au thon", kind="meal", uses=[{"name": "Thon", "qty_left": "1 boîte"}],
-                                   macros={"kcal": 650})
+    suggested = store.add_proposal("Pâtes au thon", kind="meal", macros={"kcal": 650})
     _at(monkeypatch, 14, 30)
     asyncio.run(b.check_meal(1))
     text, markup = b.sent[-1]
-    assert text.startswith("🍽️ *Ce midi, tu as mangé quoi ?*") and "Touche-le" in text
-    labels = [label for label, _ in _buttons(markup)]
-    assert labels == ["🍱 Chili", "🍽️ Pâtes au thon"]   # boîte d'abord, puis le plat proposé
+    assert text.startswith("🍽️ *Ce midi, tu as mangé quoi ?*") and "Un des plats proposés ? Touche-le" in text
+    assert [label for label, _ in _buttons(markup)] == ["🍽️ Pâtes au thon"]
 
-    chili = next(d for label, d in _buttons(markup) if "Chili" in label)
-    q = _click(b, chili, markup)
+    pasta = _buttons(markup)[0][1]
+    q = _click(b, pasta, markup)
     assert q.edits == [("markup", None)]                                       # la question est close
     meal = nutrition.meals_since(datetime.date(2026, 11, 11))[-1]
-    assert (meal["text"], meal["time"]) == ("Chili", "14:30")                  # à l'heure du repas, pas du clic
-    assert b.sent[-1][0].strip() == "😋 Il t'en reste 1 boîte."
+    assert (meal["text"], meal["time"], meal["kcal"]) == ("Pâtes au thon", "14:30", 650)   # à l'heure du repas, pas du clic
+    assert b.sent[-1][0].strip() == "Bon app' 😋"
     assert nutrition.meal_check("2026-11-11 déjeuner") == "answered"
-    assert store.proposal(suggested)["status"] == "open"                       # pas mangé : reste candidat
-    assert _click(b, chili, markup).answers == ["Déjà noté."]
-
-    _at(monkeypatch, 21, 30)                                                   # dîner : le plat proposé, une boîte de moins
-    asyncio.run(b.check_meal(2))
-    _, markup = b.sent[-1]
-    pasta = next(d for label, d in _buttons(markup) if "Pâtes" in label)
-    _click(b, pasta, markup)
     assert store.proposal(suggested)["status"] == "applied"                    # l'original ne sera plus proposé
-    assert stock_of()["Thon"] == "1 boîte"
-    assert nutrition.meals_since(datetime.date(2026, 11, 11))[-1]["kcal"] == 650
+    assert _click(b, pasta, markup).answers == ["Déjà noté."]
 
 
-def test_last_box_is_said_and_skipping_closes_the_guesses(tmp_path, monkeypatch):
+def test_skipping_closes_the_guesses(tmp_path, monkeypatch):
     import dataclasses
     b, store = _bot(tmp_path, monkeypatch)
     _patch_bot(monkeypatch, "settings",
                         dataclasses.replace(bot_module.settings, meal_check_times=[(14, 30), (21, 30)]))
-    seed_stock({"name": "Curry", "qty": "1 boîte", "boxes": True})
-    _at(monkeypatch, 14, 30)
-    asyncio.run(b.check_meal(0))
-    _, markup = b.sent[-1]
-    _click(b, _buttons(markup)[0][1], markup)
-    assert "dernière boîte" in b.sent[-1][0] and not stock_of()
-
-    seed_stock({"name": "Dahl", "qty": "2 boîtes", "boxes": True})
+    store.add_proposal("Dahl", kind="meal", macros={})
     _at(monkeypatch, 21, 30)
     asyncio.run(b.check_meal(1))
     _, markup = b.sent[-1]
@@ -969,7 +820,7 @@ def test_meal_suggestion_before_eating_and_when_it_stays_quiet(tmp_path, monkeyp
 
     async def fake_ask(prompt, chat_id, allow_writes=True, planning=False, skip_marker=None):
         calls.append((prompt, allow_writes, skip_marker))
-        mid = store.add_proposal("Omelette", kind="meal", uses=[], recipe="1. Casser les œufs")
+        mid = store.add_proposal("Omelette", kind="meal", recipe="1. Casser les œufs")
         return agent.AgentReply("Pour ce midi, je te propose :", meals=[(mid, "Omelette")])
 
     monkeypatch.setattr(bot_module.agent, "ask", fake_ask)
@@ -1115,7 +966,7 @@ def test_eat_three_moods_on_buttons_and_reshown_instead_of_rechosen(tmp_path, mo
 
     async def fake_ask(prompt, chat_id, allow_writes=True, planning=False, skip_marker=None):
         asked.append(prompt)
-        ids = [(store.add_proposal(t, kind="meal", uses=[], recipe="1. Cuire", mood=m), t)
+        ids = [(store.add_proposal(t, kind="meal", recipe="1. Cuire", mood=m), t)
                for t, m in (("🍝 Pâtes crème", "gourmand"), ("🥪 Wrap thon", "express"), ("🍲 Lentilles", "chill"))]
         return agent.AgentReply("Ce soir 👇", meals=ids)
 
@@ -1141,7 +992,7 @@ def test_eat_three_moods_on_buttons_and_reshown_instead_of_rechosen(tmp_path, mo
     assert all(store.proposal(int(d[2:]))["status"] == "ignored" for _, d in again if d.startswith("m:"))
 
 
-def test_after_shop_last_call_only_stock(monkeypatch):
+def test_after_shop_last_call_nothing_to_buy(monkeypatch):
     import dataclasses
     from bob import commands
     monkeypatch.setattr(commands, "settings", dataclasses.replace(commands.settings, shop_last_call=(19, 30)))
@@ -1244,16 +1095,15 @@ def test_meme_command_sends_a_gif_first_even_mid_session(tmp_path, monkeypatch):
     assert not tools.tool_send_gif({"query": "x", "moment": "clôture"}, tools.Ledger())["ok"]   # rule back outside /meme
 
 
-def test_chosen_dish_with_boxes_counts_as_eaten_and_meal_question_waits_an_hour(tmp_path, monkeypatch):
+def test_chosen_dish_counts_as_eaten_and_meal_question_waits_an_hour(tmp_path, monkeypatch):
     import dataclasses
     b, store = _bot(tmp_path, monkeypatch)
     _patch_bot(monkeypatch, "settings",
                         dataclasses.replace(bot_module.settings, meal_check_times=[(14, 30), (21, 30)]))
-    mid = store.add_proposal("🌮 Tortilla", kind="meal", uses=[], recipe="1. Cuire", makes="1 boîte", macros={"kcal": 700})
+    mid = store.add_proposal("🌮 Tortilla", kind="meal", recipe="1. Cuire", macros={"kcal": 700})
     _click(b, f"m:{mid}")
-    assert "1 boîte de côté" in b.sent[-1][0] and "1. Cuire" in b.sent[-1][0]
+    assert "1. Cuire" in b.sent[-1][0]
     assert nutrition.meals_since(datetime.date.today() - datetime.timedelta(days=1))[-1]["text"] == "🌮 Tortilla"   # eaten
-    assert emile_client().stock_text("boxes") == "1/3 occupées (🌮 Tortilla ×1) → 2 libre(s)"                      # + the box
 
     waits = []
 
@@ -1269,7 +1119,6 @@ def test_chosen_dish_with_boxes_counts_as_eaten_and_meal_question_waits_an_hour(
 
     asyncio.run(run())
     assert len(b.sent) == n and waits and waits[0][0] == 1 and 3500 <= waits[0][1] <= 3600   # postponed ~1 h
-
 
 
 def test_meal_suggestion_is_about_the_meal_coming_now():
@@ -1426,14 +1275,14 @@ def test_recipe_reminder_does_not_log_the_dish_twice(tmp_path, monkeypatch):
     b, store = _bot(tmp_path, monkeypatch)
     monkeypatch.setattr(tools, "store", store)
     _at(monkeypatch, 12, 30)
-    dish = store.add_proposal("Curry de poulet", kind="meal", uses=[], recipe="1. Cuire le riz", macros={"kcal": 700})
+    dish = store.add_proposal("Curry de poulet", kind="meal", recipe="1. Cuire le riz", macros={"kcal": 700})
     _click(b, f"m:{dish}")
     assert [m["text"] for m in nutrition.meals_since(datetime.date(2026, 11, 11))] == ["Curry de poulet"]
     ledger = tools.Ledger()
     monkeypatch.setattr(tools.cs, "now_utc", lambda: datetime.datetime(2026, 11, 11, 13, 30, tzinfo=datetime.timezone.utc))
     with pytest.raises(ValueError, match="déjà noté : #1"):
         tools.tool_log_meal({"description": "Curry de poulet + riz", "time": "2026-11-11T13:15:00+01:00"}, ledger)
-    again = store.add_proposal("Curry de poulet", kind="meal", uses=[], recipe="1. Cuire le riz", macros={"kcal": 700})
+    again = store.add_proposal("Curry de poulet", kind="meal", recipe="1. Cuire le riz", macros={"kcal": 700})
     _click(b, f"m:{again}")   # recette renvoyée et re-touchée : pas de 2e entrée
     assert len(nutrition.meals_since(datetime.date(2026, 11, 11))) == 1
     out = tools.tool_log_meal({"description": "Curry de poulet", "time": "2026-11-11T13:15:00+01:00", "again": True}, ledger)
@@ -1445,26 +1294,23 @@ def test_recipe_reminder_does_not_log_the_dish_twice(tmp_path, monkeypatch):
     assert "remove_meal" in {t["name"] for t in tools.ALL_TOOLS} - {t["name"] for t in tools.READ_ONLY_TOOLS}
 
 
-def test_meal_question_offers_every_box_and_answers_a_duplicate(tmp_path, monkeypatch):
+def test_meal_question_offers_the_last_dishes_and_answers_a_duplicate(tmp_path, monkeypatch):
     import dataclasses
     b, store = _bot(tmp_path, monkeypatch)
     _patch_bot(monkeypatch, "settings",
                dataclasses.replace(bot_module.settings, meal_check_times=[(10, 30), (14, 30), (21, 30)]))
-    seed_stock(*[{"name": n, "qty": "1 boîte", "boxes": True} for n in ("Chili", "Dahl", "Lasagnes")])
-    for t in ("Pâtes au thon", "Omelette", "Salade"):
-        store.add_proposal(t, kind="meal", uses=[], macros={})
+    for t in ("Pâtes au thon", "Omelette", "Chili"):
+        store.add_proposal(t, kind="meal", macros={})
     _at(monkeypatch, 14, 30)
     asyncio.run(b.check_meal(1))
     text, markup = b.sent[-1]
     labels = [label for label, _ in _buttons(markup)]
-    assert labels[:3] == ["🍱 Chili", "🍱 Dahl", "🍱 Lasagnes"] and len(labels) == 5 and "Sauté" not in " ".join(labels)
-    assert "sauté" not in text.casefold()
+    assert labels == ["🍽️ Chili", "🍽️ Omelette"] and "sauté" not in text.casefold()   # les 2 plus récents
     log_meal("Chili", datetime.datetime(2026, 11, 11, 12, 45, tzinfo=bot_module.TZ))   # déjà dit au coach
     chili = next(d for label, d in _buttons(markup) if "Chili" in label)
     _click(b, chili, markup)
     assert b.sent[-1][0].strip() == "C'était déjà noté à 12:45 👌"
     assert len(nutrition.meals_since(datetime.date(2026, 11, 11))) == 1
-    assert "Chili" in stock_of()    # la boîte n'est pas retirée deux fois
 
 
 def test_day_recap_lists_dishes_and_compares_calories_to_needs():

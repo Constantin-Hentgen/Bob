@@ -81,7 +81,7 @@ def test_profile_and_energy_balance(tmp_path, monkeypatch):
 def test_chosen_dish_carries_computed_nutrients(tmp_path, monkeypatch):
     store = Store(tmp_path / "state.json")
     monkeypatch.setattr(tools, "store", store)
-    out = tools.tool_propose_meal({"title": "🍝 Pâtes au thon", "recipe": "1. Cuire", "uses": [],
+    out = tools.tool_propose_meal({"title": "🍝 Pâtes au thon", "recipe": "1. Cuire",
                                    "items": [{"food": "pâtes cuites", "grams": 250}]}, tools.Ledger())
     macros = store.proposal(out["meal_id"])["macros"]
     assert macros["kcal"] == 315 and macros["items"][0]["grams"] == 250 and out["portion"]["kcal"] == 315

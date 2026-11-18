@@ -72,9 +72,6 @@ def test_bob_kitchen_round_trip_on_the_real_emile(adapters):
         kitchen.toggle(first.id, 0)
     with emile.calls():
         assert kitchen.toggle(second.id, 0).items[0].done                       # coché = acheté
-        assert "Pâtes" in kitchen.stock_text("prompt")
-        assert kitchen.update_stock(remove=[{"name": "Pâtes"}]).removed == ["Pâtes"]
-        assert kitchen.expire().removed == [] and kitchen.to_check().entries == []
 
 
 

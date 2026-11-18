@@ -297,7 +297,7 @@ class Store:
     # --- propositions (boutons Appliquer / Ajuster / Ignorer) -------------------------
 
     def add_proposal(self, text: str, kind: str = "plan", **data) -> int:
-        """kind : plan | weather | meal (data : uses = ingrédients du stock à retirer quand le plat est mangé)."""
+        """kind : plan | weather | meal (data : macros, recette, heure du repas)."""
         with self._lock:
             now = datetime.datetime.now(datetime.timezone.utc)
             cutoff = now - datetime.timedelta(days=PROPOSAL_TTL_DAYS)

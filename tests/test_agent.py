@@ -318,7 +318,7 @@ def test_tool_calls_written_as_text_are_retried_and_never_shown(tmp_path, monkey
     fake_text = "🍽️ Tortilla · ⏱️ 25 min\n\n[propose_meal: Tortilla pommes de terre]"
     first = NS(stop_reason="end_turn", usage=_usage(), content=[NS(type="text", text=fake_text)])
     call = NS(stop_reason="tool_use", usage=_usage(), content=[NS(type="tool_use", id="m1", name="propose_meal", input={
-        "title": "Tortilla pommes de terre", "recipe": "1. Cuire", "uses": [{"name": "Œufs"}]})])
+        "title": "Tortilla pommes de terre", "recipe": "1. Cuire"})])
     final = NS(stop_reason="end_turn", usage=_usage(), content=[NS(type="text", text="🍽️ Tortilla · ⏱️ 25 min\n[propose_meal]")])
     fake = FakeMessages([first, call, final])
     monkeypatch.setattr(agent, "_llm", llm.AnthropicLLM(NS(messages=fake)))

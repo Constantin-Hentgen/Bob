@@ -1,29 +1,28 @@
-"""Cuisine : liste de courses, recettes, stock et vérification du stock. Tout est lu et écrit chez Emile ; quand il ne
+"""Cuisine : liste de courses et recettes. Tout est lu et écrit chez Emile ; quand il ne
 répond pas, l'athlète le sait et rien n'est présenté comme enregistré."""
 import asyncio
 import datetime
 import logging
 
-from telegram import InlineKeyboardMarkup, Update
+from telegram import Update
 from telegram.constants import ParseMode
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 
 from .. import agent, commands
 from ..config import TZ
-from ..formatting import md_escape, md_unescape
 from ..i18n import _
 from ..services import Conflict, ServiceError
 from ..services import emile
-from .ui import MEAL_HINT, meal_rows, open_meals, pantry_check_markup, send_text, shopping_markup, shopping_text, without_button
+from .ui import send_text, shopping_markup, shopping_text
 
 logger = logging.getLogger(__name__)
 
-EMILE_DOWN = _("🛒 La cuisine (courses et stock) ne répond pas pour l'instant. Réessaie dans un moment.")
+EMILE_DOWN = _("🛒 La liste de courses ne répond pas pour l'instant. Réessaie dans un moment.")
 
 
 class KitchenMixin:
-    """Méthodes de CoachBot liées aux courses et au stock."""
+    """Méthodes de CoachBot liées aux courses."""
 
     async def on_list(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """/list : réaffiche la liste de courses en cours, à cocher (sans IA)."""
@@ -60,9 +59,7 @@ class KitchenMixin:
             return
         regenerate = bool(context.args) and context.args[0].lower() in ("new", "nouvelles", "autres", "other", "more")
         if lst.recipes and not regenerate:
-            meals = open_meals(lst.recipe_meals)
-            await send_text(update.message.reply_text, lst.recipes + (f"\n\n{MEAL_HINT}" if meals else ""),
-                            InlineKeyboardMarkup(meal_rows(meals)) if meals else None)
+            await send_text(update.message.reply_text, lst.recipes)
             return
         typing = asyncio.create_task(self._keep_typing(update))
         try:
@@ -76,16 +73,13 @@ class KitchenMixin:
             try:   # Emile les garde avec la liste (et les ajoute à l'événement courses)
                 def save() -> None:
                     with emile.calls():
-                        emile.client().set_recipes(lst.id, reply.text, [mid for mid, __ in reply.meals])
+                        emile.client().set_recipes(lst.id, reply.text)
                 await asyncio.to_thread(save)
             except Conflict:
                 logger.warning("Liste remplacée pendant l'écriture des recettes : elles ne sont pas gardées")
             except ServiceError as e:
                 logger.error(f"Recettes non gardées : {e}")
         await self._deliver(reply, update=update)
-
-    async def on_stock(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        await self._command(update, commands.format_stock_reply)
 
     async def on_shopping(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not update.message or not await self._authorized(update):
@@ -102,28 +96,6 @@ class KitchenMixin:
             return
         prompt = commands.shopping_prompt(days, datetime.datetime.now(TZ).date(), to_calendar)
         await self._ask_and_reply(update, prompt, allow_writes=False)
-
-    async def _on_pantry_check(self, update: Update, still_there: bool, pantry_id: str) -> None:
-        """Réponse à « Encore là ? » : la ligne de l'article disparaît du message."""
-        query = update.callback_query
-        try:
-            def answer():
-                with emile.calls():
-                    return emile.client().answer(int(pantry_id), still_there)
-            result = await asyncio.to_thread(answer)
-        except ServiceError as e:
-            logger.error(f"Réponse « encore là ? » non prise en compte : {e}")
-            await query.answer(_("La cuisine ne répond pas, rien n'a changé. Réessaie dans un moment."), show_alert=True)
-            return
-        if result is None:
-            await query.answer(_("Déjà retiré du stock."))
-        else:
-            await query.answer((_("{item} : encore là 👍") if still_there else _("{item} : retiré du stock 🗑️")).format(item=result.entry.name))
-        markup = without_button(query.message.reply_markup, f"k:y:{pantry_id}")
-        if markup is None:
-            await query.edit_message_text(_("Merci 🙏"))
-        else:
-            await query.edit_message_reply_markup(markup)
 
     async def _on_shopping_button(self, update: Update, parts: list[str]) -> None:
         query = update.callback_query
@@ -149,35 +121,3 @@ class KitchenMixin:
         except BadRequest as e:
             if "not modified" not in str(e).lower():   # « Tout décocher » sur une liste déjà vierge
                 raise
-
-    async def check_pantry(self) -> None:
-        """Chaque jour : retire ce qui est resté sans réponse, puis demande « Encore là ? » pour les produits frais
-        arrivés à échéance (un bouton par article)."""
-        today = datetime.datetime.now(TZ).date()
-        try:
-            def daily():
-                with emile.calls():
-                    kitchen = emile.client()
-                    return kitchen.expire().removed, kitchen.to_check().entries[:20]
-            expired, due = await asyncio.to_thread(daily)
-            if not due and not expired:
-                return
-            lines = []
-            if due:
-                lines.append(_("🥫 *Encore là ?* Ces produits frais arrivent à échéance :"))
-                lines += [f"- {md_escape(e.name)}" + (f" ({md_escape(e.qty)})" if e.qty else "")
-                          + _(" · acheté il y a {days} j").format(days=(today - e.added).days)
-                          for e in due]
-                lines.append(_("_Sans réponse au bout de quelques jours, je les retire du stock._"))
-            if expired:
-                lines.append(_("🗑️ Retirés du stock (pas de réponse) : {items}").format(items=md_escape(', '.join(e.name for e in expired))))
-            text = "\n".join(lines)
-            await self._push(text, pantry_check_markup(due) if due else None)
-            if due:
-                def asked():
-                    with emile.calls():
-                        emile.client().mark_asked([e.id for e in due])
-                await asyncio.to_thread(asked)
-            await agent.add_to_history(self.chat_id, "[Vérification automatique du stock envoyée par le système]", md_unescape(text))
-        except Exception:
-            logger.exception("Vérification du stock en échec")

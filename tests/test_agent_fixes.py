@@ -55,23 +55,23 @@ def test_claims_still_flagged_for_calendar_sentences():
     assert agent.claims_calendar_change("Footing ajouté à ton agenda !")
 
 
-def _stock_then(text):
+def _memory_then(text):
     call = NS(stop_reason="tool_use", usage=_usage(), content=[
-        NS(type="tool_use", id="s1", name="update_stock", input={"add": [{"name": "riz", "qty": "1 kg"}]})])
+        NS(type="tool_use", id="s1", name="remember", input={"category": "nutrition", "text": "Aime le riz"})])
     return FakeMessages([call, _text(text)])
 
 
-def test_stock_update_reply_gets_no_warning(tmp_path, monkeypatch):
+def test_memory_update_reply_gets_no_warning(tmp_path, monkeypatch):
     _setup(tmp_path, monkeypatch)
-    monkeypatch.setattr(agent, "_llm", llm.AnthropicLLM(NS(messages=_stock_then("Il te reste de quoi tenir jusqu'à jeudi 👌"))))
-    reply = asyncio.run(agent.ask("stock", chat_id="1"))
+    monkeypatch.setattr(agent, "_llm", llm.AnthropicLLM(NS(messages=_memory_then("Il te reste de quoi tenir jusqu'à jeudi 👌"))))
+    reply = asyncio.run(agent.ask("riz", chat_id="1"))
     assert "rien n'a changé" not in reply.text
 
 
-def test_calendar_claim_after_only_a_stock_update_is_still_flagged(tmp_path, monkeypatch):
+def test_calendar_claim_after_only_a_memory_update_is_still_flagged(tmp_path, monkeypatch):
     _setup(tmp_path, monkeypatch)   # une action non-agenda ne doit pas masquer une fausse promesse d'agenda
-    monkeypatch.setattr(agent, "_llm", llm.AnthropicLLM(NS(messages=_stock_then("J'ai déplacé ta séance de jeudi à vendredi."))))
-    reply = asyncio.run(agent.ask("stock", chat_id="1"))
+    monkeypatch.setattr(agent, "_llm", llm.AnthropicLLM(NS(messages=_memory_then("J'ai déplacé ta séance de jeudi à vendredi."))))
+    reply = asyncio.run(agent.ask("riz", chat_id="1"))
     assert "rien n'a changé dans ton agenda" in reply.text
 
 

@@ -5,7 +5,6 @@ import logging
 import re
 
 import requests
-from emile.core.stock import box_count
 from dataclasses import dataclass, field
 
 from . import calendar_store as cs
@@ -15,7 +14,6 @@ from .config import settings
 from .formatting import md_escape
 from .memory import CATEGORIES, GOAL_KINDS, GOAL_PRIORITIES, format_goal, store
 from .i18n import _
-from .services import ServiceError
 from .services import emile
 
 logger = logging.getLogger(__name__)
@@ -157,29 +155,7 @@ def tool_propose_change(args: dict, ledger: Ledger) -> dict:
                     "recopie pas le détail dans ta réponse."}
 
 
-def stock_changes(r: dict) -> list[str]:
-    return [f"+{x}" for x in r["added"]] + [f"−{x}" for x in r["removed"]] + [f"{x}" for x in r["updated"]]
-
-
-def tool_update_stock(args: dict, ledger: Ledger) -> dict:
-    with emile.calls():
-        r = emile.client().update_stock(args.get("add") or [], args.get("remove") or []).model_dump()
-    if changes := stock_changes(r):
-        ledger.record("stock", ", ".join(changes), True)
-    return {"ok": True, **r}
-
-
 MAX_RECIPE_CHARS = 2000
-
-
-def _uses(args: dict) -> list[dict]:
-    uses = []
-    for u in args.get("uses") or []:
-        name = " ".join(str(u.get("name") or "").split())
-        if name:
-            left = " ".join(str(u.get("qty_left") or "").split())[:40]
-            uses.append({"name": name, **({"qty_left": left} if left else {})})
-    return uses
 
 
 MEAL_MOODS = ("express", "chill", "gourmand")
@@ -198,26 +174,16 @@ def tool_propose_meal(args: dict, ledger: Ledger) -> dict:
     title = " ".join((args.get("title") or "").split())[:80]
     if not title:
         raise ValueError("titre vide")
-    uses = _uses(args)
     recipe = (args.get("recipe") or "").strip()[:MAX_RECIPE_CHARS] or None
-    if not uses and not recipe:
-        raise ValueError("aucun ingrédient du stock : pas de bouton pour ce plat")
-    makes = " ".join(str(args.get("makes") or "").split())[:40] or None
-    if makes:   # le nombre de boîtes du foyer est celui d'Emile
-        with emile.calls():
-            boxes = emile.client().household().meal_boxes
-        if box_count(makes) > boxes:
-            raise ValueError(f"l'athlète n'a que {boxes} boîtes : prévois-en {boxes} au plus "
-                             "(ou une autre session de cuisine)")
     mood = args.get("mood") if args.get("mood") in MEAL_MOODS else None
     if args.get("discovery"):
         store.add_discovery(title, datetime.datetime.now(cs.TZ).date())
     macros, unmatched = meal_nutrients(args)
-    pid = store.add_proposal(title, kind="meal", uses=uses, makes=makes, recipe=recipe, mood=mood, macros=macros)
+    pid = store.add_proposal(title, kind="meal", recipe=recipe, mood=mood, macros=macros)
     ledger.record("meal", title, True, detail=str(pid))
     note = ("Un bouton « choisir » est affiché sous ta réponse : la recette sera envoyée quand l'athlète choisira ce plat, "
-            "ne la recopie pas dans ta réponse." if recipe else "Un bouton « mangé / cuisiné » est affiché sous ta réponse.")
-    result = {"ok": True, "meal_id": pid, "note": note + " Ne mets pas le stock à jour toi-même.",
+            "ne la recopie pas dans ta réponse." if recipe else "Un bouton « mangé » est affiché sous ta réponse.")
+    result = {"ok": True, "meal_id": pid, "note": note,
               "portion": {k: macros.get(k) for k in nutrition.NUTRIENTS}}
     if unmatched:
         result["unmatched"] = unmatched
@@ -249,17 +215,6 @@ def tool_log_meal(args: dict, ledger: Ledger) -> dict:
               "items": [f"{i['grams']} g {i['ciqual']}" for i in item["items"]]}
     if unmatched:
         result["unmatched"] = f"pas trouvés dans Ciqual : {', '.join(unmatched)} ; reformule (find_food) et corrige"
-    if uses := _uses(args):   # le repas est déjà noté chez Remy : si Emile ne répond pas, on le dit
-        try:
-            with emile.calls():
-                r = emile.client().update_stock(remove=uses).model_dump()
-        except ServiceError as e:
-            ledger.record("stock", "stock non mis à jour", False, str(e))
-            result["stock"] = {"ok": False, "error": f"repas noté mais stock NON mis à jour ({e}) : dis-le à l'athlète"}
-        else:
-            if changes := stock_changes(r):
-                ledger.record("stock", ", ".join(changes), True)
-            result["stock"] = r
     return result
 
 
@@ -431,7 +386,7 @@ PROPOSE_TOOL = {
     "name": "propose_change",
     "description": (
         "Enregistre un changement de l'agenda d'ENTRAÎNEMENT que tu PROPOSES sans le faire (débrief, bilan, alerte météo, ou "
-        "quand tu demandes confirmation). Jamais pour la liste de courses ni le stock : ceux-là, fais-les directement. L'athlète la voit dans sa propre bulle avec les boutons Oui / Modifier / Non : s'il dit Oui, ce texte te sera "
+        "quand tu demandes confirmation). Jamais pour la liste de courses : celle-là, fais-la directement. L'athlète la voit dans sa propre bulle avec les boutons Oui / Modifier / Non : s'il dit Oui, ce texte te sera "
         "renvoyé pour exécution, il doit donc être autonome, précis et complet (séances, dates, heures, contenus, UID). "
         "Seul `summary` est montré à l'athlète. Une proposition par appel, et regroupe les changements liés (toute une "
         "semaine, une même idée) en une seule ; au plus 2 propositions par réponse. N'en fais pas pour un simple conseil "
@@ -448,12 +403,6 @@ PROPOSE_TOOL = {
         "required": ["summary", "change"],
     },
 }
-
-_KEEPS_DESC = (
-    "Produits périssables seulement : combien de jours il se garde une fois acheté (poisson frais 2, viande 3, pain 2, "
-    "salade 4, légumes 5-7, fruits 5-7, yaourts et fromage frais 10, œufs 21). Omettre pour ce qui se garde (épicerie "
-    "sèche, conserves, surgelés, condiments) : l'athlète recevra « Encore là ? » à cette échéance."
-)
 
 _SHOPPING_CALENDAR = (
     " Si un agenda COURSES dédié est configuré (séparé de l'agenda d'entraînement), elle y est aussi enregistrée comme UN "
@@ -489,7 +438,6 @@ SHOPPING_TOOLS = [
                             "name": {"type": "string", "description": "ex: « Bananes »"},
                             "quantity": {"type": "string", "description": "ex: « 6 », « 500 g »"},
                             "aisle": {"type": "string", "description": "rayon avec émoji, ex: « 🥦 Fruits et légumes »"},
-                            "keeps_days": {"type": "integer", "description": _KEEPS_DESC},
                         },
                         "required": ["name"],
                     },
@@ -504,7 +452,7 @@ EDIT_SHOPPING_TOOL = {
     "name": "edit_shopping_list",
     "description": (
         "Modifie la liste de courses EN COURS (visible dans le contexte) sans la recréer : `check` = articles achetés "
-        "(cochés, ils entrent dans le stock), `uncheck`, `remove` = articles à retirer de la liste, `add` = articles à "
+        "(cochés), `uncheck`, `remove` = articles à retirer de la liste, `add` = articles à "
         "ajouter. Noms exacts de la liste. L'événement de l'agenda courses et la checklist Telegram sont mis à jour. "
         "« J'ai déjà acheté X » → check (pas remove). À faire directement, sans proposition."
     ),
@@ -515,35 +463,7 @@ EDIT_SHOPPING_TOOL = {
             "uncheck": {"type": "array", "items": {"type": "string"}},
             "remove": {"type": "array", "items": {"type": "string"}},
             "add": {"type": "array", "items": {"type": "object", "properties": {
-                "name": {"type": "string"}, "quantity": {"type": "string"}, "aisle": {"type": "string"},
-                "keeps_days": {"type": "integer", "description": _KEEPS_DESC}},
-                "required": ["name"]}},
-        },
-    },
-}
-
-STOCK_TOOL = {
-    "name": "update_stock",
-    "description": (
-        "Met à jour le stock en cuisine de l'athlète : `add` pour ce qu'il a acheté ou a déjà (même nom = remplacé, ou "
-        "ajouté à ce qui reste avec merge: true quand il en rachète), "
-        "`remove` pour ce qui est fini, jeté ou utilisé (avec qty_left s'il en reste une partie). Utilise les noms exacts "
-        "du stock du contexte. À appeler dès qu'il le dit, ou quand il confirme avoir cuisiné ou mangé ce que tu proposais."
-    ),
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "add": {"type": "array", "items": {"type": "object", "properties": {
-                "name": {"type": "string"}, "qty": {"type": "string", "description": "ex: « 6 », « 500 g », « 1 pot »"},
-                "keeps_days": {"type": "integer", "description": _KEEPS_DESC},
-                "boxes": {"type": "boolean", "description": "plat cuisiné rangé en boîtes (tups) : qty = nombre de boîtes, "
-                          "ex: « 2 boîtes » ; compte dans les boîtes occupées"},
-                "merge": {"type": "boolean", "description": "true = s'ajoute à la quantité déjà au stock (« j'ai racheté "
-                          "1 kg de riz ») ; sinon la quantité remplace l'ancienne"}},
-                "required": ["name"]}},
-            "remove": {"type": "array", "items": {"type": "object", "properties": {
-                "name": {"type": "string"}, "qty_left": {"type": "string", "description": "ce qu'il en reste, si entamé "
-                                                         "(pour un plat en boîtes : les boîtes restantes, ex: « 1 boîte »)"}},
+                "name": {"type": "string"}, "quantity": {"type": "string"}, "aisle": {"type": "string"}},
                 "required": ["name"]}},
         },
     },
@@ -562,11 +482,9 @@ _ITEMS_SCHEMA = {"type": "array", "description": "les aliments de la portion man
 MEAL_TOOL = {
     "name": "propose_meal",
     "description": (
-        "À appeler pour CHAQUE plat ou recette que tu proposes de manger ou de cuisiner (/eat, /recipes, ou en "
-        "conversation) : l'athlète aura un bouton « mangé / cuisiné » qui retirera alors ces ingrédients du stock. "
-        "`uses` = les articles du stock (ou de la liste de courses en cours) que le plat consomme, noms exacts ; "
-        "qty_left = ce qu'il en restera s'il n'est pas fini. Pas les basiques du placard (sel, huile, épices) sauf "
-        "s'ils sont finis. Ne mets pas le stock à jour toi-même pour ce plat."
+        "À appeler pour CHAQUE plat ou recette que tu proposes de manger ou de cuisiner (/eat ou en "
+        "conversation, pas /recipes) : l'athlète aura un bouton « choisir » (/eat, avec `recipe`) ou « mangé » qui note "
+        "le repas dans son journal."
     ),
     "input_schema": {
         "type": "object",
@@ -578,9 +496,6 @@ MEAL_TOOL = {
                        "🥚 œufs, 🧀 fromage, 🍅 tomates, 🧅 oignon…) et marqué 🛒 s'il faut l'acheter, puis 3 à 6 "
                        "étapes courtes numérotées ; format Telegram concis ; « 📖 » + lien en dernière ligne si elle s'appuie sur "
                        "search_recipe. À omettre pour /recipes."},
-            "makes": {"type": "string", "description": "batch cooking seulement (cuisiné pour plus tard, pas mangé tout "
-                      "de suite) : nombre de boîtes, ex: « 2 boîtes » (pas plus que les boîtes libres au moment de cuisiner) ; "
-                      "le plat entre alors au stock"},
             "discovery": {"type": "boolean", "description": "true seulement pour le plat découverte de la semaine"},
             "mood": {"type": "string", "enum": ["express", "chill", "gourmand"],
                      "description": "/eat : l'envie à laquelle ce plat répond (un plat par envie)"},
@@ -588,12 +503,8 @@ MEAL_TOOL = {
             "kcal": {"type": "integer", "description": "seulement si items impossible : estimation pour une portion"},
             "protein_g": {"type": "integer"},
             "carbs_g": {"type": "integer"},
-            "uses": {"type": "array", "items": {"type": "object", "properties": {
-                "name": {"type": "string"},
-                "qty_left": {"type": "string", "description": "ce qu'il en restera, ex: « 300 g » ; omettre si fini"}},
-                "required": ["name"]}},
         },
-        "required": ["title", "uses"],
+        "required": ["title"],
     },
 }
 
@@ -601,7 +512,7 @@ REMOVE_MEAL_TOOL = {
     "name": "remove_meal",
     "description": (
         "Retire une entrée du journal alimentaire (n° # donné dans « Repas notés ») : un doublon, ou un repas noté par "
-        "erreur, une fois que l'athlète l'a confirmé. Ne remet rien au stock (update_stock si besoin)."
+        "erreur, une fois que l'athlète l'a confirmé."
     ),
     "input_schema": {"type": "object", "properties": {"id": {"type": "integer"}}, "required": ["id"]},
 }
@@ -613,8 +524,7 @@ LOG_MEAL_TOOL = {
         "mangé ? » ou spontanément), un par repas, à l'heure où il l'a mangé. Décompose-le en aliments simples avec "
         "leur poids estimé (`items`, portions habituelles si non précisées : assiette de pâtes cuites ~250 g, riz cuit "
         "~200 g, œuf ~55 g, tranche de pain ~30 g, yaourt 125 g, une boîte = la portion de sa recette) : le système "
-        "calcule les nutriments depuis la table Ciqual. `uses` retire du stock ce qu'il a consommé (noms exacts du "
-        "stock, qty_left s'il en reste) : pas besoin d'update_stock en plus. Ne pas utiliser pour un plat seulement "
+        "calcule les nutriments depuis la table Ciqual. Ne pas utiliser pour un plat seulement "
         "proposé (propose_meal)."
     ),
     "input_schema": {
@@ -626,8 +536,6 @@ LOG_MEAL_TOOL = {
             "kcal": {"type": "integer", "description": "seulement si items impossible"},
             "protein_g": {"type": "integer"},
             "carbs_g": {"type": "integer"},
-            "uses": {"type": "array", "items": {"type": "object", "properties": {
-                "name": {"type": "string"}, "qty_left": {"type": "string"}}, "required": ["name"]}},
             "again": {"type": "boolean", "description": "true seulement si l'athlète dit avoir remangé un plat déjà noté "
                                                        "(sinon le système refuse un doublon)"},
         },
@@ -733,7 +641,7 @@ RECIPE_TOOL = {
     "description": (
         "Cherche des recettes de base dans le livre de cuisine libre de Wikibooks (dans la langue du bot, CC BY-SA) : renvoie les plus "
         "proches avec ingrédients et préparation. Pour /eat, avant d'écrire la recette d'un plat : appuie-toi dessus si "
-        "elle colle, en la simplifiant et en l'adaptant au stock, et termine alors la recette par « 📖 » + son lien. "
+        "elle colle, en la simplifiant, et termine alors la recette par « 📖 » + son lien. "
         "Si rien ne colle, écris la recette toi-même, sans lien."
     ),
     "input_schema": {
@@ -799,7 +707,7 @@ def tool_send_gif(args: dict, ledger: Ledger) -> dict:
     return {"ok": False, "error": f"aucun GIF trouvé pour « {query} » : continue sans"}
 
 
-_COMMON = [*MEMORY_TOOLS, *GOAL_TOOLS, PROPOSE_TOOL, *SHOPPING_TOOLS, EDIT_SHOPPING_TOOL, STOCK_TOOL, MEAL_TOOL, LOG_MEAL_TOOL, REMOVE_MEAL_TOOL,
+_COMMON = [*MEMORY_TOOLS, *GOAL_TOOLS, PROPOSE_TOOL, *SHOPPING_TOOLS, EDIT_SHOPPING_TOOL, MEAL_TOOL, LOG_MEAL_TOOL, REMOVE_MEAL_TOOL,
            RECIPE_TOOL, FIND_FOOD_TOOL, PROFILE_TOOL,
            *([GIF_TOOL] if settings.giphy_api_key else [])]
 ALL_TOOLS = [LIST_TOOL, *WRITE_TOOLS, *_COMMON]
@@ -817,7 +725,6 @@ _IMPL = {
     "remove_goal": tool_remove_goal,
     "propose_change": tool_propose_change,
     "save_shopping_list": tool_save_shopping_list,
-    "update_stock": tool_update_stock,
     "edit_shopping_list": tool_edit_shopping_list,
     "propose_meal": tool_propose_meal,
     "log_meal": tool_log_meal,

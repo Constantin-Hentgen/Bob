@@ -129,10 +129,6 @@ async def lifespan(_: FastAPI):
                 dow, hour, minute = settings.new_dish_time
                 scheduler.add_job(bot.new_dish, "cron", day_of_week=dow, hour=hour, minute=minute,
                                   misfire_grace_time=3600, coalesce=True)
-            if settings.pantry_check_time:
-                hour, minute = settings.pantry_check_time
-                scheduler.add_job(bot.check_pantry, "cron", hour=hour, minute=minute,
-                                  misfire_grace_time=3600, coalesce=True)
             for hour, minute in settings.eat_suggest_times:
                 scheduler.add_job(bot.suggest_meal, "cron", hour=hour, minute=minute,
                                   misfire_grace_time=900, coalesce=True)
