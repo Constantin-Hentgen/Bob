@@ -1,7 +1,6 @@
 """Logique de coaching calculée par le code (pas par le modèle) : compte à rebours des objectifs,
 résumé des ressentis après séance, bilan prévu / réalisé de la semaine."""
 import datetime
-import re
 
 from .config import DAYS
 from .dreeve import distance_km, format_activity
@@ -89,68 +88,6 @@ def checkins_context(checkins: list[dict]) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Journal alimentaire et questions « qu'as-tu mangé ? »
-# ---------------------------------------------------------------------------
-
-def meal_slot(t: datetime.time) -> str:
-    """Repas correspondant à une heure de question (posée environ une heure après le repas)."""
-    hour = (t.hour - 1) % 24
-    if 4 <= hour < 11:
-        return "petit-déjeuner"
-    if 11 <= hour < 16:
-        return "déjeuner"
-    if 16 <= hour < 18:
-        return "collation"
-    return "dîner"
-
-
-def meal_window(times: list[tuple[int, int]], index: int) -> tuple[datetime.time, datetime.time, str]:
-    """Plage couverte par la question n° index : depuis la question précédente (04:00 pour la première), 5 h au plus."""
-    end = datetime.time(*times[index])
-    previous = times[index - 1] if index > 0 else (4, 0)
-    # au plus 5 h avant : la collation de 16 h n'est pas une trace du dîner
-    earliest = max(0, end.hour * 60 + end.minute - 5 * 60)
-    start_min = max(previous[0] * 60 + previous[1], earliest)
-    return datetime.time(start_min // 60, start_min % 60), end, meal_slot(end)
-
-
-def has_meal_between(meals: list[dict], day: datetime.date, start: datetime.time, end: datetime.time) -> bool:
-    lo, hi, d = f"{start:%H:%M}", f"{end:%H:%M}", day.isoformat()
-    return any(m["date"] == d and lo < m["time"] <= hi for m in meals)
-
-
-def _macros(kcal, protein, carbs, fat=None) -> str:
-    parts = [f"~{kcal} kcal" if kcal is not None else "", f"P {protein} g" if protein is not None else "",
-             f"G {carbs} g" if carbs is not None else "", f"L {fat} g" if fat is not None else ""]
-    return ", ".join(p for p in parts if p)
-
-
-def meals_context(meals: list[dict], today: datetime.date, issues: list[str] = ()) -> str:
-    """Repas notés (aujourd'hui et hier) avec leur n°, le total estimé du jour et ce qui est à vérifier (`issues`,
-    calculé par Remy : `nutrition.log_issues`)."""
-    check = ("\nÀ VÉRIFIER (calculé par le système) :\n" + "\n".join(f"- {i}" for i in issues)) if issues else ""
-    if not meals:
-        return "aucun repas noté aujourd'hui ni hier" + check
-    lines = []
-    for day in (today - datetime.timedelta(days=1), today):
-        of_day = [m for m in meals if m["date"] == day.isoformat()]
-        label = "aujourd'hui" if day == today else "hier"
-        if not of_day:
-            lines.append(f"{label} ({_day(day)}) : rien de noté")
-            continue
-        lines.append(f"{label} ({_day(day)}) :")
-        for m in of_day:
-            macros = _macros(m.get("kcal"), m.get("protein_g"), m.get("carbs_g"), m.get("fat_g"))
-            lines.append(f"- #{m['id']} {m['time']} {m['text']}" + (f" ({macros})" if macros else "")
-                         + (" [remangé, confirmé]" if m.get("repeat") else ""))
-        totals = [sum(m.get(k) or 0 for m in of_day) if any(m.get(k) is not None for m in of_day) else None
-                  for k in ("kcal", "protein_g", "carbs_g")]
-        if any(t is not None for t in totals):
-            lines.append(f"  total estimé : {_macros(*totals)}")
-    return "\n".join(lines) + check
-
-
-# ---------------------------------------------------------------------------
 # Bilan de la semaine : prévu (agenda) vs réalisé (Dreeve)
 # ---------------------------------------------------------------------------
 
@@ -203,45 +140,3 @@ def format_adherence(a: dict) -> str:
     for r in a["extra"]:
         lines.append(f"- hors plan : {format_activity(r)[2:]}")
     return "\n".join(lines)
-
-
-# ---------------------------------------------------------------------------
-# Variété des repas et plat découverte de la semaine
-# ---------------------------------------------------------------------------
-
-VARIETY_DAYS = 14
-
-
-def dish_key(text: str) -> str:
-    """« 🍝 Pâtes au thon, maïs (1 tup, ce midi) » → « pâtes au thon » : le plat, sans émoji ni détails."""
-    text = re.sub(r"\([^)]*\)", "", text or "")
-    text = re.split(r"[,;+]| et ", text)[0]
-    return " ".join(re.sub(r"[^\w' -]", " ", text.lower()).split())
-
-
-def meal_variety(meals: list[dict], today: datetime.date, days: int = VARIETY_DAYS) -> str:
-    since = (today - datetime.timedelta(days=days)).isoformat()
-    eaten = [m for m in meals if m["date"] > since and not m["text"].startswith("rien (")]
-    if len(eaten) < 3:
-        return "pas assez de repas notés pour juger"
-    counts: dict[str, int] = {}
-    for m in eaten:
-        key = dish_key(m["text"])
-        if key:
-            counts[key] = counts.get(key, 0) + 1
-    top = sorted(counts.items(), key=lambda kv: -kv[1])[:4]
-    repeated = ", ".join(f"{k} ×{n}" for k, n in top if n > 1) or "aucun plat répété"
-    return (f"{days} derniers jours : {len(eaten)} repas notés, {len(counts)} plats différents ; "
-            f"les plus fréquents : {repeated}")
-
-
-def discovery_context(discoveries: list[dict], meals: list[dict], today: datetime.date) -> str:
-    if not discoveries:
-        return "aucune pour l'instant"
-    last = discoveries[-1]
-    key = dish_key(last["title"])
-    tried = bool(key) and any(m["date"] >= last["date"] and key in dish_key(m["text"]) for m in meals)
-    status = "goûté 👍" if tried else "pas encore goûté : il peut être l'une des options de /eat"
-    older = ", ".join(d["title"] for d in discoveries[-6:-1])
-    return (f"cette semaine : {last['title']} (proposé le {last['date']}, {status})"
-            + (f" ; déjà proposés avant (ne pas reproposer) : {older}" if older else ""))

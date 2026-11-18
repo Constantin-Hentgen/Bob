@@ -7,7 +7,7 @@ import pytest
 
 from bob import agent
 from bob import bot as bot_module
-from bob.handlers import info, jobs, kitchen, meals, runs, ui
+from bob.handlers import info, jobs, kitchen, runs, ui
 from bob import voice, weather, weather_alerts
 from bob import calendar_store as cs
 from bob.config import TZ, settings
@@ -17,7 +17,7 @@ from bob.weather_alerts import Hour
 
 def _patch_bot(monkeypatch, name, value):
     """Le code du bot est réparti sur plusieurs modules : on patche `name` partout où il est lu."""
-    for module in (m for m in (bot_module, ui, meals, kitchen, runs, jobs, info) if hasattr(m, name)):
+    for module in (m for m in (bot_module, ui, kitchen, runs, jobs, info) if hasattr(m, name)):
         monkeypatch.setattr(module, name, value)
 
 

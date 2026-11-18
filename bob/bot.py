@@ -6,7 +6,7 @@ import datetime
 import functools
 import logging
 
-from telegram import InlineKeyboardMarkup, Update
+from telegram import Update
 from telegram.constants import ChatAction, ParseMode
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes, MessageHandler, filters
 
@@ -18,7 +18,6 @@ from .services import ServiceError
 from .handlers.info import InfoMixin
 from .handlers.jobs import JobsMixin
 from .handlers.kitchen import KitchenMixin
-from .handlers.meals import MealsMixin
 from .handlers.runs import ACTIVITY_STATUS, RunsMixin  # noqa: F401  (ACTIVITY_STATUS : réexporté, lu par app.py)
 from .handlers.ui import (
     BUBBLE_GAP_S,  # noqa: F401
@@ -26,8 +25,6 @@ from .handlers.ui import (
     MAX_MESSAGES_IN_A_ROW,
     PROPOSAL_OUTCOME,
     bubble_gap,  # noqa: F401
-    meal_hint,
-    meal_rows,
     merge_messages,
     proposal_bubble,
     proposal_markup,
@@ -46,7 +43,7 @@ APPLY_PROMPT = "Applique maintenant cette proposition que tu m'as faite et que j
 MESSAGE_DEBOUNCE_S = 4.0   # silence attendu avant de répondre, pour regrouper les messages envoyés à la suite
 
 
-class CoachBot(InfoMixin, KitchenMixin, MealsMixin, RunsMixin, JobsMixin):
+class CoachBot(InfoMixin, KitchenMixin, RunsMixin, JobsMixin):
     def __init__(self, app: Application):
         self.app = app
         self.chat_id = settings.telegram_chat_id
@@ -67,15 +64,11 @@ class CoachBot(InfoMixin, KitchenMixin, MealsMixin, RunsMixin, JobsMixin):
 
     async def _deliver(self, reply: agent.AgentReply, header: str = "", update: Update | None = None) -> None:
         """Réponse de l'agent, puis chaque proposition dans sa propre bulle avec ses boutons."""
-        footer, markup = "", None
-        if reply.meals:
-            footer, markup = meal_hint(reply.meals), InlineKeyboardMarkup(meal_rows(reply.meals))
-        body = "\n".join(part for part in (header, reply.text) if part)   # l'en-tête reste sur le premier message
-        text = "\n".join(part for part in (body, footer) if part)   # l'indication des boutons : dans le dernier message
+        text = "\n".join(part for part in (header, reply.text) if part)   # l'en-tête reste sur le premier message
         if text:   # un message par paragraphe : une conversation, pas un pavé
             if reply.gif and reply.gif_moment == "ouverture":   # le GIF ouvre l'échange, avant le premier message
                 await self._send_gif(reply.gif, update)
-            await send_text(self._sender(update), text, markup, as_bubbles=True, typing=self._typing(update),
+            await send_text(self._sender(update), text, as_bubbles=True, typing=self._typing(update),
                             max_bubbles=MAX_MESSAGES_IN_A_ROW - len(reply.proposals))   # propositions comprises
         if reply.gif and (reply.gif_moment != "ouverture" or not text):   # clôture : après le dernier message
             await self._send_gif(reply.gif, update)
@@ -237,14 +230,6 @@ class CoachBot(InfoMixin, KitchenMixin, MealsMixin, RunsMixin, JobsMixin):
                 await self._on_checkin(update, parts[1], parts[2], parts[3])
             elif parts[0] == "s":
                 await self._on_shopping_button(update, parts)
-            elif parts[0] == "m":
-                await self._on_meal(update, parts[1])
-            elif parts[0] == "q":
-                await self._on_meal_question(update, parts[1], parts[2], int(parts[3]))
-            elif parts[0] == "e":
-                await self._on_eat_again(update)
-            elif parts[0] == "k":
-                await self._on_pantry_check(update, parts[1] == "y", parts[2])
             elif parts[0] == "r":
                 await self._on_route_button(update, parts[1], parts[2], parts[3])
             else:
@@ -299,7 +284,7 @@ def build_bot() -> CoachBot:
     bot = CoachBot(app)
     handlers = {
         "plan": bot.on_agenda, "load": bot.on_form, "runs": bot.on_last_runs, "weather": bot.on_weather,
-        "goals": bot.on_goals, "memory": bot.on_memory, "list": bot.on_list, "recipes": bot.on_recipes, "eat": bot.on_eat, "stock": bot.on_stock, "meme": bot.on_meme, "nutrition": bot.on_nutrition,
+        "goals": bot.on_goals, "memory": bot.on_memory, "list": bot.on_list, "recipes": bot.on_recipes, "meme": bot.on_meme,
         "routes": bot.on_routes, "newroute": bot.on_new_route, "debrief": bot.on_debrief, "review": bot.on_review,
         "shopping": bot.on_shopping, "briefing": bot.on_briefing, "help": bot.on_help,
     }

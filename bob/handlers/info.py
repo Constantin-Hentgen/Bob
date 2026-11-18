@@ -1,4 +1,4 @@
-"""Commandes instantanées ou simples : aide, mémoire, objectifs, agenda, forme, météo, nutrition, boucles, mème."""
+"""Commandes instantanées ou simples : aide, mémoire, objectifs, agenda, forme, météo, boucles, mème."""
 import asyncio
 import base64
 import dataclasses
@@ -9,7 +9,7 @@ from types import SimpleNamespace
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InputMediaDocument, InputMediaPhoto, Update
 from telegram.ext import ContextTypes
 
-from .. import agent, commands, dreeve, nutrition, weather
+from .. import agent, commands, dreeve, weather
 from .. import calendar_store as cs
 from ..config import TZ, settings
 from ..formatting import md_escape
@@ -203,13 +203,6 @@ class InfoMixin:
         except Exception:
             logger.exception("Envoi des boucles en échec")
             await self._push(_("Les boucles sont prêtes mais Telegram n'a pas voulu les prendre 🥲 Réessaie ?"))
-
-    async def on_nutrition(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        def build() -> str:
-            today = datetime.datetime.now(TZ).date()
-            runs = dreeve.get_all_runs() if settings.dreeve_enabled else []
-            return commands.format_nutrition(nutrition.snapshot(runs, today), nutrition.meals_since(today), today)
-        await self._command(update, build)
 
     async def on_agenda(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         days = commands.parse_days(context.args or [])

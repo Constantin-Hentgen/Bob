@@ -54,7 +54,7 @@ def test_prompt_bans_the_tics_seen_in_real_conversations():
 
 
 def test_tics_are_detected_and_ordinary_sentences_are_not():
-    for text in ("Noté, 53,5 kg 👌", "Merci, c'est noté dans ton profil.", "Lentilles retirées du stock.",
+    for text in ("Noté, 53,5 kg 👌", "Merci, c'est noté dans ton profil.",
                  "Pas de poulet enregistré de mon côté.", "Tu veux que je te propose un dîner ?",
                  "Ta recette, je ne l'ai plus en mémoire 😅", "il manque ton sexe... ah non, c'est renseigné"):
         assert agent.tics(text), text
