@@ -157,9 +157,3 @@ def test_app_docs_disabled():
     assert app.docs_url is None and app.redoc_url is None and app.openapi_url is None
 
 
-def test_nutrition_check_time_default(monkeypatch):
-    from bob import config
-    monkeypatch.delenv("NUTRITION_CHECK_TIME", raising=False)
-    src = open(config.__file__, encoding="utf-8").read()
-    assert '"NUTRITION_CHECK_TIME", "22:00"' in src
-    assert config._briefing_time(config._str("NUTRITION_CHECK_TIME", "22:00"), "NUTRITION_CHECK_TIME") == (22, 0)

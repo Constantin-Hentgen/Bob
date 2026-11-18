@@ -113,9 +113,8 @@ class Store:
         state.setdefault("checkins", {})      # id d'activité → {date, minutes, name, feel (0 = mort, 10 = facile ; anciens : rpe), legs}
         # Liste de courses, stock et recettes : chez Emile depuis v5.3. Les anciennes clés (shopping, pantry,
         # next_shopping_id, next_pantry_id) restent dans le fichier, intactes, comme sauvegarde pour l'import.
-        # Journal des repas, profil et questions repas : chez Remy depuis v5.2. Les anciennes clés (meals, profile,
-        # next_meal_id, meal_checks) restent dans le fichier, intactes, comme sauvegarde pour l'import.
-        state.setdefault("discoveries", [])   # plat nouveau de la semaine : [{title, date}] (jamais reproposé)
+        # Journal des repas et profil : chez Remy de v5.2 à v6, plus suivis depuis v7. Les anciennes clés (meals,
+        # profile, next_meal_id, meal_checks, discoveries) restent dans le fichier, intactes.
         # clé séance → {until, hazards, cleared} ; migre l'ancien format « rain_alerts » (clé → fin du créneau)
         alerts = state.setdefault("weather_alerts", {})
         for key, until in state.pop("rain_alerts", {}).items():
@@ -297,7 +296,7 @@ class Store:
     # --- propositions (boutons Appliquer / Ajuster / Ignorer) -------------------------
 
     def add_proposal(self, text: str, kind: str = "plan", **data) -> int:
-        """kind : plan | weather | meal (data : macros, recette, heure du repas)."""
+        """kind : plan | weather."""
         with self._lock:
             now = datetime.datetime.now(datetime.timezone.utc)
             cutoff = now - datetime.timedelta(days=PROPOSAL_TTL_DAYS)
@@ -322,31 +321,6 @@ class Store:
             item["closed"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
             self._save()
             return dict(item)
-
-    def reopen_proposal(self, pid: int | str) -> None:
-        """Rouvre une proposition close à tort (l'action n'a pas pu aboutir) : le bouton remarche."""
-        with self._lock:
-            item = self.state["proposals"].get(str(pid))
-            if item and item["status"] != "open":
-                item["status"] = "open"
-                item.pop("closed", None)
-                self._save()
-
-    def last_dish_chosen_at(self) -> datetime.datetime | None:
-        """Quand l'athlète a choisi pour la dernière fois un plat de /eat (bouton), s'il l'a fait."""
-        times = [datetime.datetime.fromisoformat(p["closed"]) for p in self.state["proposals"].values()
-                 if p.get("kind") == "meal" and p.get("recipe") and p["status"] == "applied" and p.get("closed")]
-        return max(times, default=None)
-
-    @property
-    def discoveries(self) -> list[dict]:
-        return [dict(d) for d in self.state["discoveries"]]
-
-    def add_discovery(self, title: str, day: datetime.date) -> None:
-        with self._lock:
-            self.state["discoveries"].append({"title": title, "date": day.isoformat()})
-            self.state["discoveries"] = self.state["discoveries"][-104:]   # deux ans de découvertes
-            self._save()
 
     # --- ressenti après séance --------------------------------------------------------
 

@@ -259,25 +259,6 @@ def test_dodging_reply_is_retried_once(tmp_path, monkeypatch):
     assert {"role": "user", "content": agent.DODGE_NUDGE} in fake.calls[1]["messages"]
 
 
-def test_skip_marker_returns_nothing_and_keeps_history_clean(tmp_path, monkeypatch):
-    store = Store(tmp_path / "state.json")
-    monkeypatch.setattr(agent, "store", store)
-    monkeypatch.setattr(tools, "store", store)
-
-    async def fake_context():
-        return "CONTEXTE"
-
-    async def no_tools():
-        return []
-
-    monkeypatch.setattr(agent, "_gather_context", fake_context)
-    monkeypatch.setattr(dreeve_mcp, "load_tools", no_tools)
-    skip = NS(stop_reason="end_turn", usage=_usage(), content=[NS(type="text", text="« PAS_DE_SUGGESTION »")])
-    monkeypatch.setattr(agent, "_llm", llm.AnthropicLLM(NS(messages=FakeMessages([skip]))))
-    reply = asyncio.run(agent.ask("repas ?", chat_id="1", allow_writes=False, skip_marker="PAS_DE_SUGGESTION"))
-    assert reply.text == "" and not reply.meals and store.history("1") == []
-
-
 def test_too_long_reply_is_rewritten_once(tmp_path, monkeypatch):
     store = Store(tmp_path / "state.json")
     monkeypatch.setattr(agent, "store", store)
@@ -315,19 +296,19 @@ def test_tool_calls_written_as_text_are_retried_and_never_shown(tmp_path, monkey
 
     monkeypatch.setattr(agent, "_gather_context", fake_context)
     monkeypatch.setattr(dreeve_mcp, "load_tools", no_tools)
-    fake_text = "🍽️ Tortilla · ⏱️ 25 min\n\n[propose_meal: Tortilla pommes de terre]"
+    fake_text = "Ta liste est prête 🛒\n\n[save_shopping_list: riz]"
     first = NS(stop_reason="end_turn", usage=_usage(), content=[NS(type="text", text=fake_text)])
-    call = NS(stop_reason="tool_use", usage=_usage(), content=[NS(type="tool_use", id="m1", name="propose_meal", input={
-        "title": "Tortilla pommes de terre", "recipe": "1. Cuire"})])
-    final = NS(stop_reason="end_turn", usage=_usage(), content=[NS(type="text", text="🍽️ Tortilla · ⏱️ 25 min\n[propose_meal]")])
+    call = NS(stop_reason="tool_use", usage=_usage(), content=[NS(type="tool_use", id="m1", name="save_shopping_list", input={
+        "items": [{"name": "Riz"}], "days_covered": 3, "estimated_cost_min_eur": 2, "estimated_cost_max_eur": 3})])
+    final = NS(stop_reason="end_turn", usage=_usage(), content=[NS(type="text", text="Ta liste est prête 🛒\n[save_shopping_list]")])
     fake = FakeMessages([first, call, final])
     monkeypatch.setattr(agent, "_llm", llm.AnthropicLLM(NS(messages=fake)))
-    reply = asyncio.run(agent.ask("/eat", chat_id="1", allow_writes=False))
-    assert [t for _, t in reply.meals] == ["Tortilla pommes de terre"]               # vraiment appelé
-    nudge = agent.PSEUDO_TOOL_NUDGE.format(names="propose_meal")
+    reply = asyncio.run(agent.ask("/shopping", chat_id="1", allow_writes=False))
+    assert reply.shopping_list is not None                                           # vraiment appelé
+    nudge = agent.PSEUDO_TOOL_NUDGE.format(names="save_shopping_list")
     assert {"role": "user", "content": nudge} in fake.calls[1]["messages"]           # relance explicite
-    assert reply.text == "🍽️ Tortilla · ⏱️ 25 min"                                   # jamais affiché
-    assert agent.pseudo_tool_calls("[send_gif: high five]\n[Note système, x]\n[propose_meal]") == ["send_gif", "propose_meal"]
+    assert reply.text == "Ta liste est prête 🛒"                                      # jamais affiché
+    assert agent.pseudo_tool_calls("[send_gif: high five]\n[Note système, x]\n[set_goal]") == ["send_gif", "set_goal"]
 
 
 def test_the_coach_is_always_bob():

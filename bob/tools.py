@@ -1,6 +1,5 @@
 """Outils exposés au modèle + registre (ledger) des actions réellement effectuées."""
 import contextvars
-import datetime
 import logging
 import re
 
@@ -9,7 +8,6 @@ from dataclasses import dataclass, field
 
 from . import calendar_store as cs
 from . import memes
-from . import nutrition
 from .config import settings
 from .formatting import md_escape
 from .memory import CATEGORIES, GOAL_KINDS, GOAL_PRIORITIES, format_goal, store
@@ -21,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class Action:
-    kind: str       # create | update | delete | remember | forget | goal | goal_remove | proposal | meal | shopping | shopping_event
+    kind: str       # create | update | delete | remember | forget | goal | goal_remove | proposal | shopping | shopping_event
     label: str
     ok: bool
     detail: str = ""
@@ -153,69 +151,6 @@ def tool_propose_change(args: dict, ledger: Ledger) -> dict:
     return {"ok": True, "proposal_id": pid,
             "note": "L'athlète voit le summary avec des boutons Oui / Modifier / Non sous ta réponse ; ne "
                     "recopie pas le détail dans ta réponse."}
-
-
-MAX_RECIPE_CHARS = 2000
-
-
-MEAL_MOODS = ("express", "chill", "gourmand")
-
-
-def meal_nutrients(args: dict) -> tuple[dict, list[str]]:
-    """Nutriments d'un repas : calculés depuis Ciqual si les aliments sont donnés (items), sinon les estimations."""
-    if args.get("items"):
-        computed = nutrition.compute(args["items"])
-        if computed["items"]:
-            return {**computed["totals"], "items": computed["items"]}, computed["unmatched"]
-    return {k: args.get(k) for k in ("kcal", "protein_g", "carbs_g")}, []
-
-
-def tool_propose_meal(args: dict, ledger: Ledger) -> dict:
-    title = " ".join((args.get("title") or "").split())[:80]
-    if not title:
-        raise ValueError("titre vide")
-    recipe = (args.get("recipe") or "").strip()[:MAX_RECIPE_CHARS] or None
-    mood = args.get("mood") if args.get("mood") in MEAL_MOODS else None
-    if args.get("discovery"):
-        store.add_discovery(title, datetime.datetime.now(cs.TZ).date())
-    macros, unmatched = meal_nutrients(args)
-    pid = store.add_proposal(title, kind="meal", recipe=recipe, mood=mood, macros=macros)
-    ledger.record("meal", title, True, detail=str(pid))
-    note = ("Un bouton « choisir » est affiché sous ta réponse : la recette sera envoyée quand l'athlète choisira ce plat, "
-            "ne la recopie pas dans ta réponse." if recipe else "Un bouton « mangé » est affiché sous ta réponse.")
-    result = {"ok": True, "meal_id": pid, "note": note,
-              "portion": {k: macros.get(k) for k in nutrition.NUTRIENTS}}
-    if unmatched:
-        result["unmatched"] = unmatched
-    return result
-
-
-def tool_remove_meal(args: dict, ledger: Ledger) -> dict:
-    item = nutrition.remove_meal(int(args["id"]))
-    if item is None:
-        raise ValueError(f"aucun repas #{args['id']} dans le journal")
-    ledger.record("meal_log", f"retiré : {item['time']} {item['text']}", True)
-    return {"ok": True, "removed": {k: v for k, v in item.items() if k != "items"}}
-
-
-def tool_log_meal(args: dict, ledger: Ledger) -> dict:
-    at = cs.parse_dt(args["time"]) if args.get("time") else cs.now_utc()
-    if at > cs.now_utc() + datetime.timedelta(minutes=5):
-        raise ValueError("repas dans le futur : n'enregistre que ce qui a été mangé")
-    again = bool(args.get("again"))
-    estimate = {k: args.get(k) for k in ("kcal", "protein_g", "carbs_g")}
-    item, dup, unmatched = nutrition.log_meal(args.get("description", ""), at, items=args.get("items"),
-                                              estimate=estimate, repeat=again)
-    if dup:
-        raise ValueError(f"déjà noté : #{dup['id']} le {dup['date']} à {dup['time']} « {dup['text']} ». Rien n'a été "
-                         "ajouté. Redemander ou relire une recette n'est pas la manger ; seulement si l'athlète dit "
-                         "clairement l'avoir remangé, rappelle log_meal avec again=true.")
-    ledger.record("meal_log", f"{item['time']} {item['text']}", True)
-    result = {"ok": True, "logged": {k: v for k, v in item.items() if k != "items"},
-              "items": [f"{i['grams']} g {i['ciqual']}" for i in item["items"]]}
-    if unmatched:
-        result["unmatched"] = f"pas trouvés dans Ciqual : {', '.join(unmatched)} ; reformule (find_food) et corrige"
-    return result
 
 
 def tool_edit_shopping_list(args: dict, ledger: Ledger) -> dict:
@@ -469,80 +404,6 @@ EDIT_SHOPPING_TOOL = {
     },
 }
 
-_ITEMS_SCHEMA = {"type": "array", "description": "les aliments de la portion mangée, décomposés en aliments simples (un "
-          "plat composé = ses ingrédients), chacun avec son poids estimé ; les nutriments sont calculés par le "
-          "système depuis la table Ciqual. `code` = le code Ciqual choisi via find_food (sinon le système prend "
-          "l'aliment le plus proche de `food`).",
-          "items": {"type": "object", "properties": {
-              "food": {"type": "string", "description": "à la manière de Ciqual, ex: « pâtes sèches cuites », « thon au naturel », « emmental râpé »"},
-              "grams": {"type": "number"},
-              "code": {"type": "string"}},
-              "required": ["food", "grams"]}}
-
-MEAL_TOOL = {
-    "name": "propose_meal",
-    "description": (
-        "À appeler pour CHAQUE plat ou recette que tu proposes de manger ou de cuisiner (/eat ou en "
-        "conversation, pas /recipes) : l'athlète aura un bouton « choisir » (/eat, avec `recipe`) ou « mangé » qui note "
-        "le repas dans son journal."
-    ),
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "title": {"type": "string", "description": "nom court du plat, qui commence par UN émoji qui le symbolise, "
-                      "ex: « 🍝 Pâtes au thon », « 🌮 Tortilla », « 🥗 Bowl saumon riz »"},
-            "recipe": {"type": "string", "description": "/eat : la recette complète, envoyée seulement quand l'athlète "
-                       "choisit ce plat (bouton « choisir ») : ingrédients avec quantités, chacun précédé de son émoji (🌽 maïs, "
-                       "🥚 œufs, 🧀 fromage, 🍅 tomates, 🧅 oignon…) et marqué 🛒 s'il faut l'acheter, puis 3 à 6 "
-                       "étapes courtes numérotées ; format Telegram concis ; « 📖 » + lien en dernière ligne si elle s'appuie sur "
-                       "search_recipe. À omettre pour /recipes."},
-            "discovery": {"type": "boolean", "description": "true seulement pour le plat découverte de la semaine"},
-            "mood": {"type": "string", "enum": ["express", "chill", "gourmand"],
-                     "description": "/eat : l'envie à laquelle ce plat répond (un plat par envie)"},
-            "items": _ITEMS_SCHEMA,
-            "kcal": {"type": "integer", "description": "seulement si items impossible : estimation pour une portion"},
-            "protein_g": {"type": "integer"},
-            "carbs_g": {"type": "integer"},
-        },
-        "required": ["title"],
-    },
-}
-
-REMOVE_MEAL_TOOL = {
-    "name": "remove_meal",
-    "description": (
-        "Retire une entrée du journal alimentaire (n° # donné dans « Repas notés ») : un doublon, ou un repas noté par "
-        "erreur, une fois que l'athlète l'a confirmé."
-    ),
-    "input_schema": {"type": "object", "properties": {"id": {"type": "integer"}}, "required": ["id"]},
-}
-
-LOG_MEAL_TOOL = {
-    "name": "log_meal",
-    "description": (
-        "Note dans le journal alimentaire un repas ou une collation que l'athlète DIT avoir mangé (réponse à « qu'as-tu "
-        "mangé ? » ou spontanément), un par repas, à l'heure où il l'a mangé. Décompose-le en aliments simples avec "
-        "leur poids estimé (`items`, portions habituelles si non précisées : assiette de pâtes cuites ~250 g, riz cuit "
-        "~200 g, œuf ~55 g, tranche de pain ~30 g, yaourt 125 g, une boîte = la portion de sa recette) : le système "
-        "calcule les nutriments depuis la table Ciqual. Ne pas utiliser pour un plat seulement "
-        "proposé (propose_meal)."
-    ),
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "description": {"type": "string", "description": "ex: « Curry de poulet + riz (1 boîte), yaourt »"},
-            "time": {"type": "string", "description": "heure du repas (pas de ta réponse), ISO, ex: 2026-11-11T12:30:00"},
-            "items": _ITEMS_SCHEMA,
-            "kcal": {"type": "integer", "description": "seulement si items impossible"},
-            "protein_g": {"type": "integer"},
-            "carbs_g": {"type": "integer"},
-            "again": {"type": "boolean", "description": "true seulement si l'athlète dit avoir remangé un plat déjà noté "
-                                                       "(sinon le système refuse un doublon)"},
-        },
-        "required": ["description"],
-    },
-}
-
 GIF_TOOL = {
     "name": "send_gif",
     "description": (
@@ -571,76 +432,11 @@ GIF_TOOL = {
     },
 }
 
-FIND_FOOD_TOOL = {
-    "name": "find_food",
-    "description": (
-        "Cherche des aliments dans la table de composition Ciqual (ANSES) : pour chaque description, les aliments les "
-        "plus proches avec leur code et leurs valeurs pour 100 g. À utiliser avant log_meal / propose_meal quand "
-        "l'aliment n'est pas évident, puis passer le `code` choisi dans items."
-    ),
-    "input_schema": {
-        "type": "object",
-        "properties": {"queries": {"type": "array", "items": {"type": "string"},
-                                   "description": "ex: [« blanc de poulet cuit », « fromage râpé »]"}},
-        "required": ["queries"],
-    },
-}
-
-
-def tool_find_food(args: dict, ledger: Ledger) -> dict:
-    out = {}
-    for q in (args.get("queries") or [])[:12]:
-        out[q] = [{"code": f["code"], "name": f["name"], **{k: f[k] for k in ("kcal", "protein_g", "carbs_g", "fat_g")}}
-                  for f in nutrition.search(q, 6)]
-    return {"ok": True, "per_100g": out}
-
-
-PROFILE_TOOL = {
-    "name": "set_profile",
-    "description": "Enregistre le profil de l'athlète pour le bilan énergétique (seulement ce qu'il a dit) : poids, "
-                   "taille, année de naissance, sexe.",
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "weight_kg": {"type": "number"},
-            "height_cm": {"type": "number"},
-            "birth_year": {"type": "integer"},
-            "sex": {"type": "string", "enum": ["homme", "femme"]},
-        },
-    },
-}
-
-
-def tool_set_profile(args: dict, ledger: Ledger) -> dict:
-    values = {k: args.get(k) for k in ("weight_kg", "height_cm", "birth_year", "sex")}
-    for key, lo, hi, unit in (("weight_kg", 30, 250, "kg"), ("height_cm", 120, 230, "cm"),
-                              ("birth_year", 1920, datetime.date.today().year - 10, "")):
-        if values[key] not in (None, ""):
-            try:
-                v = float(values[key])
-            except (TypeError, ValueError):
-                raise ValueError(f"{key} invalide : un nombre est attendu")
-            if not lo <= v <= hi:
-                raise ValueError(f"{key} hors limites ({lo}-{hi}{' ' + unit if unit else ''}) : vérifie avec l'athlète")
-    if values["sex"] not in (None, "") and str(values["sex"]).strip().lower() not in ("homme", "femme"):
-        raise ValueError("sex : « homme » ou « femme »")
-    if values["birth_year"] not in (None, ""):
-        values["birth_year"] = int(float(values["birth_year"]))
-    for key in ("weight_kg", "height_cm"):
-        if values[key] not in (None, ""):
-            values[key] = float(values[key])
-    if values["sex"] not in (None, ""):
-        values["sex"] = str(values["sex"]).strip().lower()
-    profile = nutrition.update_profile(**values)
-    ledger.record("profile", ", ".join(f"{k}={v}" for k, v in values.items() if v not in (None, "")), True)
-    return {"ok": True, "profile": profile}
-
-
 RECIPE_TOOL = {
     "name": "search_recipe",
     "description": (
         "Cherche des recettes de base dans le livre de cuisine libre de Wikibooks (dans la langue du bot, CC BY-SA) : renvoie les plus "
-        "proches avec ingrédients et préparation. Pour /eat, avant d'écrire la recette d'un plat : appuie-toi dessus si "
+        "proches avec ingrédients et préparation. Avant d'écrire une recette : appuie-toi dessus si "
         "elle colle, en la simplifiant, et termine alors la recette par « 📖 » + son lien. "
         "Si rien ne colle, écris la recette toi-même, sans lien."
     ),
@@ -707,12 +503,11 @@ def tool_send_gif(args: dict, ledger: Ledger) -> dict:
     return {"ok": False, "error": f"aucun GIF trouvé pour « {query} » : continue sans"}
 
 
-_COMMON = [*MEMORY_TOOLS, *GOAL_TOOLS, PROPOSE_TOOL, *SHOPPING_TOOLS, EDIT_SHOPPING_TOOL, MEAL_TOOL, LOG_MEAL_TOOL, REMOVE_MEAL_TOOL,
-           RECIPE_TOOL, FIND_FOOD_TOOL, PROFILE_TOOL,
+_COMMON = [*MEMORY_TOOLS, *GOAL_TOOLS, PROPOSE_TOOL, *SHOPPING_TOOLS, EDIT_SHOPPING_TOOL, RECIPE_TOOL,
            *([GIF_TOOL] if settings.giphy_api_key else [])]
 ALL_TOOLS = [LIST_TOOL, *WRITE_TOOLS, *_COMMON]
-# pas d'effacement de mémoire ni d'objectifs dans les échanges sans écriture (débrief, /eat, suggestions…) ; ordre inchangé
-READ_ONLY_TOOLS = [LIST_TOOL, *(t for t in _COMMON if t["name"] not in ("forget", "remove_goal", "remove_meal"))]
+# pas d'effacement de mémoire ni d'objectifs dans les échanges sans écriture (débrief, bilans…) ; ordre inchangé
+READ_ONLY_TOOLS = [LIST_TOOL, *(t for t in _COMMON if t["name"] not in ("forget", "remove_goal"))]
 
 _IMPL = {
     "list_calendar_events": tool_list,
@@ -726,13 +521,8 @@ _IMPL = {
     "propose_change": tool_propose_change,
     "save_shopping_list": tool_save_shopping_list,
     "edit_shopping_list": tool_edit_shopping_list,
-    "propose_meal": tool_propose_meal,
-    "log_meal": tool_log_meal,
-    "remove_meal": tool_remove_meal,
     "send_gif": tool_send_gif,
     "search_recipe": tool_search_recipe,
-    "find_food": tool_find_food,
-    "set_profile": tool_set_profile,
 }
 
 

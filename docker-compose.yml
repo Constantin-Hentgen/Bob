@@ -62,11 +62,6 @@ services:
       COACH_TZ: ${COACH_TZ:-}
       BRIEFING_TIME: ${BRIEFING_TIME:-}
       WEEKLY_REVIEW_TIME: ${WEEKLY_REVIEW_TIME:-}
-      MEAL_CHECK_TIMES: ${MEAL_CHECK_TIMES:-}
-      EAT_SUGGEST_TIMES: ${EAT_SUGGEST_TIMES:-}
-      SHOP_LAST_CALL: ${SHOP_LAST_CALL:-}
-      NEW_DISH_TIME: ${NEW_DISH_TIME:-}
-      NUTRITION_CHECK_TIME: ${NUTRITION_CHECK_TIME:-}
       WHISPER_MODEL: ${WHISPER_MODEL:-}
       ACTIVITY_POLL_MINUTES: ${ACTIVITY_POLL_MINUTES:-}
       PLANNING_HORIZON_DAYS: ${PLANNING_HORIZON_DAYS:-}
@@ -74,8 +69,6 @@ services:
       HISTORY_MESSAGES: ${HISTORY_MESSAGES:-}
       COACH_SEED_MEMORY: ${COACH_SEED_MEMORY:-}
       # Services voisins, dans ce même stack (voir le wiki « Services ») : seule la clé d'API est à saisir
-      REMY_URL: ${REMY_URL:-}
-      REMY_API_KEY: ${REMY_API_KEY:-}
       EMILE_URL: ${EMILE_URL:-}
       DORA_URL: ${DORA_URL:-}
       EMILE_API_KEY: ${EMILE_API_KEY:-}
@@ -92,24 +85,10 @@ services:
     volumes:
       - coach-data:/data
     depends_on:
-      - remy
       - emile
       - dora
 
-  # Nutrition : journal des repas, profil, besoins, bilans (https://github.com/Constantin-Hentgen/Remy).
-  # Aucun port publié : seul Bob lui parle, sur le réseau du stack (http://remy:8000).
-  remy:
-    image: ghcr.io/constantin-hentgen/remy:0.6.0   # même version que le client dans pyproject.toml
-    container_name: remy
-    restart: unless-stopped
-    environment:
-      REMY_ADMIN_KEY: ${REMY_ADMIN_KEY:-}
-      LOG_LEVEL: ${REMY_LOG_LEVEL:-}
-      TZ: ${COACH_TZ:-Europe/Paris}
-    volumes:
-      - remy-data:/data
-
-  # Courses : liste, stock, boîtes, recettes, agenda courses (https://github.com/Constantin-Hentgen/Emile).
+  # Courses : liste, boîtes, recettes, agenda courses (https://github.com/Constantin-Hentgen/Emile).
   emile:
     image: ghcr.io/constantin-hentgen/emile:0.6.0   # même version que le client dans pyproject.toml
     container_name: emile
@@ -179,6 +158,5 @@ services:
 
 volumes:
   coach-data:
-  remy-data:
   emile-data:
   dora-segments:

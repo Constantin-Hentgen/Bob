@@ -84,22 +84,12 @@ def _briefing_time(value: str | None, name: str = "BRIEFING_TIME") -> tuple[int,
         raise ValueError(f"{name} doit être au format HH:MM ou « off » (reçu : {value!r})") from None
 
 
-def _meal_times(value: str | None, name: str = "MEAL_CHECK_TIMES") -> list[tuple[int, int]]:
-    """« 10:30,14:30,21:30 » → heures triées (MEAL_CHECK_TIMES, EAT_SUGGEST_TIMES) ; off = jamais."""
-    if not value or value.lower() in ("off", "non", "no", "none", "0"):
-        return []
-    try:
-        return sorted(_briefing_time(part.strip(), name) for part in value.split(",") if part.strip())
-    except TypeError:   # un élément « off » au milieu de la liste
-        raise ValueError(f"{name} doit être une liste HH:MM séparée par des virgules ou « off » (reçu : {value!r})") from None
-
-
 _DOW = {"mon": 0, "lun": 0, "tue": 1, "mar": 1, "wed": 2, "mer": 2, "thu": 3, "jeu": 3,
         "fri": 4, "ven": 4, "sat": 5, "sam": 5, "sun": 6, "dim": 6}
 
 
 def _weekly_time(value: str | None, name: str = "WEEKLY_REVIEW_TIME") -> tuple[int, int, int] | None:
-    """« sun 19:00 » → (jour 0-6, heure, minute) (WEEKLY_REVIEW_TIME, NEW_DISH_TIME) ; off = désactivé."""
+    """« sun 19:00 » → (jour 0-6, heure, minute) (WEEKLY_REVIEW_TIME) ; off = désactivé."""
     if not value or value.lower() in ("off", "non", "no", "none", "0"):
         return None
     try:
@@ -195,12 +185,7 @@ class Settings:
     tz: ZoneInfo
     briefing_time: tuple[int, int] | None
     weekly_review: tuple[int, int, int] | None
-    new_dish_time: tuple[int, int, int] | None
-    shop_last_call: tuple[int, int] | None
     language: str
-    nutrition_check_time: tuple[int, int] | None
-    meal_check_times: list[tuple[int, int]]
-    eat_suggest_times: list[tuple[int, int]]
     whisper_model: str | None
     activity_poll_minutes: int
     planning_horizon_days: int
@@ -209,9 +194,7 @@ class Settings:
     seed_memory: str | None
     data_dir: str
     http_timeout: int
-    # Services voisins (même stack Docker) : nutrition (Remy), courses (Emile)
-    remy_url: str
-    remy_api_key: str | None
+    # Services voisins (même stack Docker) : courses (Emile), boucles (Dora)
     emile_url: str
     dora_url: str
     emile_api_key: str | None
@@ -259,12 +242,7 @@ class Settings:
             tz=ZoneInfo(_str("COACH_TZ") or _str("TZ") or "Europe/Paris"),
             briefing_time=_briefing_time(_str("BRIEFING_TIME", "08:00")),
             weekly_review=_weekly_time(_str("WEEKLY_REVIEW_TIME", "sun 19:00")),
-            new_dish_time=_weekly_time(_str("NEW_DISH_TIME", "sat 10:00"), "NEW_DISH_TIME"),
-            shop_last_call=_briefing_time(_str("SHOP_LAST_CALL", "19:30"), "SHOP_LAST_CALL"),
-            nutrition_check_time=_briefing_time(_str("NUTRITION_CHECK_TIME", "22:00"), "NUTRITION_CHECK_TIME"),
             language=_language(_str("BOT_LANGUAGE")),
-            meal_check_times=_meal_times(_str("MEAL_CHECK_TIMES", "10:30,14:30,21:30")),
-            eat_suggest_times=_meal_times(_str("EAT_SUGGEST_TIMES", "07:00,11:30,18:30"), "EAT_SUGGEST_TIMES"),
             whisper_model=_optional_model(_str("WHISPER_MODEL", "small")),
             activity_poll_minutes=_int("ACTIVITY_POLL_MINUTES", 1),
             planning_horizon_days=_int("PLANNING_HORIZON_DAYS", 30),
@@ -273,8 +251,6 @@ class Settings:
             seed_memory=_str("COACH_SEED_MEMORY"),
             data_dir=_str("COACH_DATA_DIR", "data"),
             http_timeout=_int("HTTP_TIMEOUT", 8),
-            remy_url=_str("REMY_URL", "http://remy:8000").rstrip("/"),
-            remy_api_key=_str("REMY_API_KEY"),
             emile_url=_str("EMILE_URL", "http://emile:8000").rstrip("/"),
             dora_url=_str("DORA_URL", "http://dora:8000").rstrip("/"),
             emile_api_key=_str("EMILE_API_KEY"),
@@ -283,10 +259,6 @@ class Settings:
     @property
     def dreeve_enabled(self) -> bool:
         return bool(self.dreeve_url and self.dreeve_api_key)
-
-    @property
-    def remy_enabled(self) -> bool:
-        return bool(self.remy_url and self.remy_api_key)
 
     @property
     def emile_enabled(self) -> bool:
@@ -316,7 +288,6 @@ class Settings:
             "Dreeve MCP (DREEVE_MCP_KEY)": self.dreeve_mcp_key and self.dreeve_mcp_url,
             f"Messages vocaux (WHISPER_MODEL={self.whisper_model or 'off'})": self.whisper_model,
             f"Météo ({', '.join(n for n, __, __ in self.weather_locations) or 'WEATHER_LOCATIONS'})": self.weather_enabled,
-            f"Remy, nutrition ({self.remy_url}, REMY_API_KEY)": self.remy_enabled,
             f"Emile, courses ({self.emile_url}, EMILE_API_KEY)": self.emile_enabled,
             f"Dora, boucles ({self.dora_url})": bool(self.dora_url),
         }
@@ -325,7 +296,6 @@ class Settings:
         logger.info(f"[CONFIG] fournisseur={self.llm_provider} ({self.llm_base_url or 'api.anthropic.com'}), "
                     f"modèles={self.model} (conversation) / {self.planning_model} (planification), "
                     f"fuseau={self.tz.key}, briefing={self.briefing_time}, bilan hebdo={self.weekly_review}, "
-                    f"questions repas={self.meal_check_times}, suggestions repas={self.eat_suggest_times}, "
                     f"détection runs={self.activity_poll_minutes} min")
 
 

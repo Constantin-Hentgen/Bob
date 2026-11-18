@@ -17,14 +17,13 @@ from .config import UTC, settings
 from .services import STATUS, ServiceError
 from .services import dora as dora_service
 from .services import emile as emile_service
-from .services import remy as remy_service
 
 logging.basicConfig(level=(os.getenv("LOG_LEVEL") or "INFO").strip().upper(), format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logging.getLogger("httpx").setLevel(logging.WARNING)   # sinon une ligne par long-polling Telegram
 logger = logging.getLogger("bob")
 
 
-SERVICES = (remy_service, emile_service, dora_service)   # services voisins du même stack
+SERVICES = (emile_service, dora_service)   # services voisins du même stack
 
 
 def services_health() -> dict[str, dict[str, object]]:
@@ -121,20 +120,6 @@ async def lifespan(_: FastAPI):
                 dow, hour, minute = settings.weekly_review
                 scheduler.add_job(bot.weekly_review, "cron", day_of_week=dow, hour=hour, minute=minute,
                                   misfire_grace_time=3600, coalesce=True)
-            if settings.nutrition_check_time:
-                hour, minute = settings.nutrition_check_time
-                scheduler.add_job(bot.check_nutrition, "cron", hour=hour, minute=minute,
-                                  misfire_grace_time=3600, coalesce=True)
-            if settings.new_dish_time:
-                dow, hour, minute = settings.new_dish_time
-                scheduler.add_job(bot.new_dish, "cron", day_of_week=dow, hour=hour, minute=minute,
-                                  misfire_grace_time=3600, coalesce=True)
-            for hour, minute in settings.eat_suggest_times:
-                scheduler.add_job(bot.suggest_meal, "cron", hour=hour, minute=minute,
-                                  misfire_grace_time=900, coalesce=True)
-            for i, (hour, minute) in enumerate(settings.meal_check_times):
-                scheduler.add_job(bot.check_meal, "cron", hour=hour, minute=minute, args=[i],
-                                  misfire_grace_time=1800, coalesce=True)
             if settings.weather_enabled and settings.caldav_url and settings.rain_check_minutes > 0:
                 scheduler.add_job(bot.check_weather, "interval", minutes=settings.rain_check_minutes, coalesce=True,
                                   next_run_time=datetime.datetime.now(settings.tz) + datetime.timedelta(minutes=1))

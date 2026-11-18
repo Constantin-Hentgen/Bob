@@ -119,7 +119,7 @@ wheels = [
 
 [[package]]
 name = "bob"
-version = "5.1.0"
+version = "6.0.0"
 source = { virtual = "." }
 dependencies = [
     { name = "anthropic" },
@@ -134,7 +134,6 @@ dependencies = [
     { name = "icalendar" },
     { name = "mcp" },
     { name = "python-telegram-bot" },
-    { name = "remy", extra = ["client"] },
     { name = "requests" },
     { name = "tzdata" },
     { name = "uvicorn" },
@@ -145,7 +144,6 @@ dev = [
     { name = "emile", extra = ["service"] },
     { name = "pytest" },
     { name = "pyyaml" },
-    { name = "remy", extra = ["server"] },
 ]
 
 [package.metadata]
@@ -162,7 +160,6 @@ requires-dist = [
     { name = "icalendar", specifier = ">=6.0" },
     { name = "mcp", specifier = ">=2.0" },
     { name = "python-telegram-bot", specifier = ">=21.0" },
-    { name = "remy", extras = ["client"], url = "https://github.com/Constantin-Hentgen/Remy/archive/refs/tags/v0.6.0.tar.gz" },
     { name = "requests", specifier = ">=2.31.0" },
     { name = "tzdata" },
     { name = "uvicorn", specifier = ">=0.28.0" },
@@ -173,7 +170,6 @@ dev = [
     { name = "emile", extras = ["service"], url = "https://github.com/Constantin-Hentgen/Emile/archive/refs/tags/v0.6.0.tar.gz" },
     { name = "pytest", specifier = ">=8" },
     { name = "pyyaml", specifier = ">=6.0.3" },
-    { name = "remy", extras = ["server"], url = "https://github.com/Constantin-Hentgen/Remy/archive/refs/tags/v0.6.0.tar.gz" },
 ]
 
 [[package]]
@@ -1952,44 +1948,6 @@ sdist = { url = "https://files.pythonhosted.org/packages/22/f5/df4e9027acead3ecc
 wheels = [
     { url = "https://files.pythonhosted.org/packages/2c/58/ca301544e1fa93ed4f80d724bf5b194f6e4b945841c5bfd555878eea9fcb/referencing-0.37.0-py3-none-any.whl", hash = "sha256:381329a9f99628c9069361716891d34ad94af76e461dcb0335825aecc7692231", size = 26766, upload-time = "2025-10-13T15:30:47.625Z" },
 ]
-
-[[package]]
-name = "remy"
-version = "0.6.0"
-source = { url = "https://github.com/Constantin-Hentgen/Remy/archive/refs/tags/v0.6.0.tar.gz" }
-dependencies = [
-    { name = "pydantic" },
-]
-sdist = { hash = "sha256:6b8da4cfd2eca274aa1b5c5bce200b16a7a7c95f72bfb714bb2404c7ab6d5abd" }
-
-[package.optional-dependencies]
-client = [
-    { name = "httpx" },
-]
-server = [
-    { name = "alembic" },
-    { name = "fastapi" },
-    { name = "httpx" },
-    { name = "pydantic-settings" },
-    { name = "sqlalchemy" },
-    { name = "tzdata" },
-    { name = "uvicorn", extra = ["standard"] },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "alembic", marker = "extra == 'server'", specifier = ">=1.14" },
-    { name = "fastapi", marker = "extra == 'server'", specifier = ">=0.115" },
-    { name = "httpx", marker = "extra == 'client'", specifier = ">=0.27" },
-    { name = "httpx", marker = "extra == 'server'", specifier = ">=0.27" },
-    { name = "psycopg", extras = ["binary"], marker = "extra == 'postgres'", specifier = ">=3.2" },
-    { name = "pydantic", specifier = ">=2.9" },
-    { name = "pydantic-settings", marker = "extra == 'server'", specifier = ">=2.6" },
-    { name = "sqlalchemy", marker = "extra == 'server'", specifier = ">=2.0.36" },
-    { name = "tzdata", marker = "extra == 'server'" },
-    { name = "uvicorn", extras = ["standard"], marker = "extra == 'server'", specifier = ">=0.32" },
-]
-provides-extras = ["server", "postgres", "client"]
 
 [[package]]
 name = "requests"

@@ -29,7 +29,7 @@ Bob ▸ Vas-y tranquille, t'as encore de la fatigue dans les jambes 😮‍💨
 - 📅 **Plans in your CalDAV calendar** (Radicale, Nextcloud, Baïkal, Fastmail, iCloud…), backward from your goals; every write is checked on the server
 - 🏃 **Uses your Dreeve data**: load, whole run history, a debrief and check-in after each run
 - 🌧️ **Weather alerts** per session and training place
-- 🥗 **Meals and nutrition**: meal ideas, shopping checklist, food log computed from the Ciqual table
+- 🛒 **Shopping**: a shopping checklist built around your goals and sessions, with batch-cooking recipes
 - 🗺️ **Running loops** around home or work, as maps and GPX files
 - 🎙️ **Voice notes** transcribed locally, 🧠 **memory** of your preferences, 🌍 French or English, single-user and self-hosted
 - 🤖 **Bring your own model**: Anthropic, OpenAI, DeepSeek, Mistral, OpenRouter, Groq, Gemini, or a local Ollama / LM Studio / vLLM server
@@ -60,7 +60,7 @@ The **[wiki](https://github.com/Constantin-Hentgen/Bob/wiki)** covers everything
 - [Configuration](https://github.com/Constantin-Hentgen/Bob/wiki/Configuration): every environment variable, with its type and default
 - [Deployment](https://github.com/Constantin-Hentgen/Bob/wiki/Deployment): Docker Compose, Portainer, updates and backups
 - [Commands](https://github.com/Constantin-Hentgen/Bob/wiki/Commands) and [Coaching](https://github.com/Constantin-Hentgen/Bob/wiki/Coaching): what you can ask and what the coach does on its own
-- [Weather Alerts](https://github.com/Constantin-Hentgen/Bob/wiki/Weather-Alerts), [Meals and Nutrition](https://github.com/Constantin-Hentgen/Bob/wiki/Meals-and-Nutrition), [Running Routes](https://github.com/Constantin-Hentgen/Bob/wiki/Running-Routes)
+- [Weather Alerts](https://github.com/Constantin-Hentgen/Bob/wiki/Weather-Alerts), [Shopping List](https://github.com/Constantin-Hentgen/Bob/wiki/Meals-and-Nutrition), [Running Routes](https://github.com/Constantin-Hentgen/Bob/wiki/Running-Routes)
 - [Error Messages](https://github.com/Constantin-Hentgen/Bob/wiki/Error-Messages) and [Known Limitations](https://github.com/Constantin-Hentgen/Bob/wiki/Known-Limitations): when something goes wrong
 - [How It Works](https://github.com/Constantin-Hentgen/Bob/wiki/How-It-Works), [Integrations](https://github.com/Constantin-Hentgen/Bob/wiki/Integrations), [Privacy and Safeguards](https://github.com/Constantin-Hentgen/Bob/wiki/Privacy-and-Safeguards), [Contributing](https://github.com/Constantin-Hentgen/Bob/wiki/Contributing)
 
@@ -68,4 +68,4 @@ Release notes: [CHANGELOG.md](CHANGELOG.md) and [Releases](https://github.com/Co
 
 ## License
 
-[MIT](LICENSE). Nutrition data: Anses. 2020. Table de composition nutritionnelle des aliments Ciqual, [Licence Ouverte](https://www.etalab.gouv.fr/licence-ouverte-open-licence). Map data © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors.
+[MIT](LICENSE). Map data © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors.

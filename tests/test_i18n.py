@@ -66,29 +66,21 @@ from bob.config import TZ, settings
 from bob.handlers import ui
 day = datetime.date(2026, 11, 14)
 import pathlib, tempfile
-from bob import nutrition
-from bob.services import remy as remy_service
 from bob.services import emile as emile_service
-from tests.conftest import LocalEmile, LocalRemy
-remy_service.client = LocalRemy(pathlib.Path(tempfile.mkdtemp()))   # le vrai Remy, dans le processus
-local_emile = LocalEmile(pathlib.Path(tempfile.mkdtemp()), language="en")   # et le vrai Emile, foyer en anglais
+from tests.conftest import LocalEmile
+local_emile = LocalEmile(pathlib.Path(tempfile.mkdtemp()), language="en")   # le vrai Emile, foyer en anglais
 emile_service.client = local_emile
 kitchen = local_emile()
 shopping = kitchen.create_list([{"name": "Bananas", "qty": "7", "aisle": "🥦 Fruit"}], days=7, cost_min=50, cost_max=60)
-nutrition.update_profile(weight_kg=70, height_cm=178, birth_year=1995, sex="homme")
-nutrition.log_meal("Porridge", datetime.datetime(2026, 11, 14, 8, 0, tzinfo=TZ),
-                   estimate={"kcal": 450, "protein_g": 15, "carbs_g": 70, "fat_g": 10})
-snap = nutrition.snapshot([], day)
 n = wa.Notice("alert", key="k", uid="u", summary="Easy run", start=datetime.datetime(2026, 11, 15, 18, tzinfo=TZ),
               end=datetime.datetime(2026, 11, 15, 19, tzinfo=TZ), place="Home", hazards={"pluie": "80 %, 2.0 mm"}, others={"Work": {}})
 daily = {"time": ["2026-11-15"], "weathercode": [61], "temperature_2m_min": [4.0], "temperature_2m_max": [11.0],
          "precipitation_sum": [2.4], "precipitation_probability_max": [80], "windspeed_10m_max": [20.0]}
 out = [commands.HELP_TEXT, *(c.description for c in commands.BOT_COMMANDS),
-       commands.format_day_recap(snap, day), commands.format_nutrition(snap, nutrition.meals_since(day), day),
        commands.format_agenda([], 7), kitchen.list_text("prompt"), ui.shopping_text(shopping), commands.format_goals_reply([], day),
        commands.format_form({"tsb": {}, "acRatio": {}}, [], day),
        wa.format_notice(n, datetime.datetime(2026, 11, 14, 20, tzinfo=TZ)), weather.format_forecast([daily], ["Home"], {"Home": []}),
-       ui.PROPOSAL_OUTCOME["a"], ui.MEAL_HINT, *ui.LEG_LABELS.values()]
+       ui.PROPOSAL_OUTCOME["a"], *ui.LEG_LABELS.values()]
 print("\n@@\n".join(out))
 print("@@LANG@@", agent.SYSTEM_PROMPT.startswith("LANGUE (IMPÉRATIF)"), settings.language, voice.VOCABULARY[:5])
 '''
@@ -105,7 +97,7 @@ def test_english_bot_speaks_english_end_to_end(tmp_path):
     assert res.returncode == 0, res.stderr
     text, lang = res.stdout.split("@@LANG@@")
     assert lang.split() == ["True", "en", "Voice"]
-    assert "Your day on the plate" in text and "Home: ☔ rain" in text and "Sun 15/11" in text
+    assert "Shopping list" in text and "Home: ☔ rain" in text and "Sun 15/11" in text
     french = re.findall(r"\b(?:tu|ton|ta|tes|je|séances?|repas|boîtes?|aujourd'hui|jours?|pluie|besoins|sortie|"
                         r"lundi|dimanche|dans|avec|pour|sur)\b", text, re.I)
     assert not french, f"mots français dans la sortie anglaise : {sorted(set(french))}"
