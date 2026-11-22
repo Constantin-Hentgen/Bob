@@ -2,6 +2,26 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.0.0](https://github.com/Constantin-Hentgen/Bob/compare/v6.0.0...v7.0.0) (2026-11-22)
+
+
+### ⚠ BREAKING CHANGES
+
+* Bob no longer sends the morning briefing, the weekly review or weather alerts on its own; the four settings above are ignored.
+* /stock, /eat and /nutrition are removed; MEAL_CHECK_TIMES, EAT_SUGGEST_TIMES, NUTRITION_CHECK_TIME, NEW_DISH_TIME, SHOP_LAST_CALL, PANTRY_CHECK_TIME and REMY_* are no longer read, and the remy service leaves the stack (its remy-data volume is kept).
+
+### Added
+
+* correct the feeling of a past run ([#93](https://github.com/Constantin-Hentgen/Bob/issues/93)) ([3e5c164](https://github.com/Constantin-Hentgen/Bob/commit/3e5c16465f44a7b06831373f462523f758f08408)), closes [#70](https://github.com/Constantin-Hentgen/Bob/issues/70)
+* drop food monitoring and keep only the shopping list ([#87](https://github.com/Constantin-Hentgen/Bob/issues/87)) ([9da164e](https://github.com/Constantin-Hentgen/Bob/commit/9da164eb8ba80fd60808a3b2bf1d1658c9ae0a87)), closes [#86](https://github.com/Constantin-Hentgen/Bob/issues/86) [#88](https://github.com/Constantin-Hentgen/Bob/issues/88)
+* only send autonomous messages after a new run ([#91](https://github.com/Constantin-Hentgen/Bob/issues/91)) ([7ab8afe](https://github.com/Constantin-Hentgen/Bob/commit/7ab8afe20c5016135b7a370d7f45ef289510813d))
+
+
+### Fixed
+
+* **compose:** keep dora-segments running and healthy so the stack stays green ([#84](https://github.com/Constantin-Hentgen/Bob/issues/84)) ([9736a3d](https://github.com/Constantin-Hentgen/Bob/commit/9736a3d6d045d8565a8bbf3c96f196ca8c1bff59))
+* no stray thank-you after the post-run check-in ([#92](https://github.com/Constantin-Hentgen/Bob/issues/92)) ([2adc096](https://github.com/Constantin-Hentgen/Bob/commit/2adc09680eeae858037ee2c0acd7c6c917047762)), closes [#89](https://github.com/Constantin-Hentgen/Bob/issues/89)
+
 ## [6.0.0](https://github.com/Constantin-Hentgen/Bob/compare/v5.1.0...v6.0.0) (2026-11-17)
 
 
