@@ -124,10 +124,6 @@ MESSAGES: dict[str, str] = {
         "❌ Couldn't build the review: {error}",
     '📊 *Bilan de la semaine*':
         '📊 *Weekly review*',
-    '❌ Briefing matinal impossible : {error}':
-        "❌ Couldn't run the morning briefing: {error}",
-    '❌ Bilan de la semaine impossible : {error}':
-        "❌ Couldn't build the weekly review: {error}",
     '❌ Indisponible : {error}':
         '❌ Unavailable: {error}',
     '*🧠 Ce que je sais de toi*':
@@ -250,8 +246,6 @@ MESSAGES: dict[str, str] = {
         'On your sessions',
     '🏃 *Sur tes séances* (créneau exact)':
         '🏃 *On your sessions* (exact slot)',
-    "🏃 *Salut, c'est Bob* 🤖\nÉcris-moi simplement : « décale ma sortie de samedi », « je suis crevé, allège demain », « planifie ma semaine »…\n\n*Infos instantanées* (sans IA, gratuites)\n/plan — séances prévues sur 7 jours (/plan 14 pour 14 jours)\n/load — charge d'entraînement (TSB, ratio A/C) et volume\n/runs — tes 5 derniers runs\n/weather — prévisions par lieu\n/goals — tes objectifs et le compte à rebours\n/memory — ce que je sais de toi\n\n*Avec le coach* (IA)\n/debrief — débrief de ton dernier run\n/review — bilan de la semaine : prévu vs fait, forme, semaine prochaine\n/shopping — liste de courses pour 7 jours selon tes objectifs sportifs et santé (/shopping 3 pour 3 jours), à cocher au magasin\n/list — réaffiche ta liste de courses en cours, à cocher\n/recipes — recettes faciles à préparer en boîtes avec ta liste (/recipes new pour en avoir d'autres)\n/briefing — briefing complet, ajuste le programme dans l'agenda\n/meme — un mème qui résume ta journée d'entraînement 😂\n/routes — 2 ou 3 boucles à la distance et au lieu de ta prochaine séance, là où tu ne croises personne : ni voitures, ni foule, ni vélos (carte + fichier GPX) ; /routes travail 8 nature pour choisir le lieu, la distance et le revêtement\n/newroute — une boucle jamais courue : /newroute 10 route bois de vincennes (distance, route / nature / mixte, lieu) ; ce qui manque, je te le demande\n\n/help — cette aide\n\nTu peux aussi m'envoyer des *vocaux* 🎙️. Quand je propose un changement, des boutons te permettent de l'appliquer.\n\n_Automatique : débrief et ressenti après chaque run, briefing chaque matin, bilan le dimanche soir, alerte météo (pluie, chaleur, vent, verglas) sur tes séances._":
-        "🏃 *Hi, it's Bob* 🤖\nJust text me: “move Saturday's run”, “I'm wiped, make tomorrow easier”, “plan my week”…\n\n*Instant info* (no AI, free)\n/plan — sessions planned for the next 7 days (/plan 14 for 14 days)\n/load — training load (TSB, A/C ratio) and volume\n/runs — your last 5 runs\n/weather — forecast per place\n/goals — your goals and the countdown\n/memory — what I know about you\n\n*With the coach* (AI)\n/debrief — debrief of your last run\n/review — weekly review: planned vs done, form, next week\n/shopping — shopping list for 7 days based on your sport and health goals (/shopping 3 for 3 days), to tick off in the store\n/list — shows your current shopping list again, to tick off\n/recipes — easy meal-prep recipes for your list (/recipes new for other ones)\n/briefing — full briefing, adjusts the plan in your calendar\n/meme — a meme that sums up your training day 😂\n/routes — 2 or 3 loops at your next session's distance and place, where you meet no one: no cars, no crowds, no bikes (map + GPX file); /routes work 8 trail to choose the place, distance and surface\n/newroute — a loop you've never run: /newroute 10 road central park (distance, road / trail / mixed, place); I'll ask for whatever is missing\n\n/help — this help\n\nYou can also send me *voice messages* 🎙️. When I suggest a change, buttons let you apply it.\n\n_Automatic: debrief and check-in after each run, a briefing every morning, a review on Sunday evening, weather alerts (rain, heat, wind, ice) on your sessions._",
     '☀️ dégagé':
         '☀️ clear',
     '🌤️ peu nuageux':
@@ -296,26 +290,8 @@ MESSAGES: dict[str, str] = {
         'gusts {gust} km/h',
     '{temp}°C, sol glissant possible':
         '{temp}°C, possibly slippery ground',
-    'imminent':
-        'imminent',
-    'dans {n} h':
-        'in {n} h',
     'dans {n} j':
         'in {n} d',
-    '✅ *Bonne nouvelle* : plus de risque ({what}) sur ta séance « {session} »':
-        '✅ *Good news*: no more risk ({what}) on your session “{session}”',
-    '_On garde le programme prévu._':
-        '_We keep the plan as is._',
-    '☔ *Pluie prévue sur ta séance*':
-        '☔ *Rain forecast on your session*',
-    '⚠️ *Météo à surveiller sur ta séance*':
-        '⚠️ *Weather to watch on your session*',
-    '{title} « {session} »':
-        '{title} “{session}”',
-    '✅ RAS, bonne alternative':
-        '✅ all clear, a good alternative',
-    '_« Adapter » : je te propose un créneau ou un lieu plus favorable. Tu peux aussi me répondre directement._':
-        "_“Adapt”: I'll suggest a better slot or place. You can also just reply to me._",
     'pluie {prob}{mm} mm':
         'rain {prob}{mm} mm',
     'sec':
@@ -324,10 +300,6 @@ MESSAGES: dict[str, str] = {
         ' (risk {prob} %)',
     'ressenti {temp}°C':
         'feels like {temp}°C',
-    '🔁 Adapter':
-        '🔁 Adapt',
-    '👍 Je garde':
-        '👍 Keep it',
     "RÈGLES (toujours appliquées, sauf demande explicite contraire de l'athlète)":
         'RULES (always applied, unless the athlete explicitly asks otherwise)',
     'PRÉFÉRENCES FORTES (appliquées sauf bonne raison, à expliquer)':
@@ -364,4 +336,6 @@ MESSAGES: dict[str, str] = {
         'avg HR {hr}',
     'Sortie':
         'Run',
+    "🏃 *Salut, c'est Bob* 🤖\nÉcris-moi simplement : « décale ma sortie de samedi », « je suis crevé, allège demain », « planifie ma semaine »…\n\n*Infos instantanées* (sans IA, gratuites)\n/plan — séances prévues sur 7 jours (/plan 14 pour 14 jours)\n/load — charge d'entraînement (TSB, ratio A/C) et volume\n/runs — tes 5 derniers runs\n/weather — prévisions par lieu\n/goals — tes objectifs et le compte à rebours\n/memory — ce que je sais de toi\n\n*Avec le coach* (IA)\n/debrief — débrief de ton dernier run\n/review — bilan de la semaine : prévu vs fait, forme, semaine prochaine\n/shopping — liste de courses pour 7 jours selon tes objectifs sportifs et santé (/shopping 3 pour 3 jours), à cocher au magasin\n/list — réaffiche ta liste de courses en cours, à cocher\n/recipes — recettes faciles à préparer en boîtes avec ta liste (/recipes new pour en avoir d'autres)\n/briefing — briefing complet, ajuste le programme dans l'agenda\n/meme — un mème qui résume ta journée d'entraînement 😂\n/routes — 2 ou 3 boucles à la distance et au lieu de ta prochaine séance, là où tu ne croises personne : ni voitures, ni foule, ni vélos (carte + fichier GPX) ; /routes travail 8 nature pour choisir le lieu, la distance et le revêtement\n/newroute — une boucle jamais courue : /newroute 10 route bois de vincennes (distance, route / nature / mixte, lieu) ; ce qui manque, je te le demande\n\n/help — cette aide\n\nTu peux aussi m'envoyer des *vocaux* 🎙️. Quand je propose un changement, des boutons te permettent de l'appliquer.\n\n_Automatique : débrief et ressenti après chaque run. Bob n'écrit jamais le premier sinon._":
+        "🏃 *Hi, it's Bob* 🤖\nJust text me: “move Saturday's run”, “I'm wiped, make tomorrow easier”, “plan my week”…\n\n*Instant info* (no AI, free)\n/plan — sessions planned for the next 7 days (/plan 14 for 14 days)\n/load — training load (TSB, A/C ratio) and volume\n/runs — your last 5 runs\n/weather — forecast per place\n/goals — your goals and the countdown\n/memory — what I know about you\n\n*With the coach* (AI)\n/debrief — debrief of your last run\n/review — weekly review: planned vs done, form, next week\n/shopping — shopping list for 7 days based on your sport and health goals (/shopping 3 for 3 days), to tick off in the store\n/list — shows your current shopping list again, to tick off\n/recipes — easy meal-prep recipes for your list (/recipes new for other ones)\n/briefing — full briefing, adjusts the plan in your calendar\n/meme — a meme that sums up your training day 😂\n/routes — 2 or 3 loops at your next session's distance and place, where you meet no one: no cars, no crowds, no bikes (map + GPX file); /routes work 8 trail to choose the place, distance and surface\n/newroute — a loop you've never run: /newroute 10 road central park (distance, road / trail / mixed, place); I'll ask for whatever is missing\n\n/help — this help\n\nYou can also send me *voice messages* 🎙️. When I suggest a change, buttons let you apply it.\n\n_Automatic: debrief and check-in after each run. Bob never writes first otherwise._",
 }

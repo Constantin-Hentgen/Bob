@@ -137,7 +137,7 @@ def test_check_new_activity_retries_when_telegram_fails(tmp_path, monkeypatch):
 
 import datetime  # noqa: E402
 
-from bob import coaching, commands, weather_alerts  # noqa: E402
+from bob import coaching, commands  # noqa: E402
 from bob.formatting import md_unescape  # noqa: E402
 
 
@@ -176,13 +176,6 @@ def test_help_lists_every_command():
     for name, _, _ in commands.COMMANDS:
         assert f"/{name}" in commands.HELP_TEXT
     assert md_unescape(commands.format_weather(" (lieux : Maison)\n  lun 09/11 : ciel clair")).endswith("- lun 09/11 : ciel clair")
-
-
-def test_rain_alert_lead_time():
-    now = datetime.datetime(2026, 11, 8, 12, tzinfo=datetime.timezone.utc)
-    assert weather_alerts.lead_time(now + datetime.timedelta(hours=31, minutes=20), now) == "dans 31 h"
-    assert weather_alerts.lead_time(now + datetime.timedelta(minutes=20), now) == "imminent"
-    assert weather_alerts.lead_time(now + datetime.timedelta(days=3), now) == "dans 3 j"
 
 
 def test_shopping_days_and_prompt():
@@ -242,15 +235,12 @@ def test_proposal_buttons_apply_once(tmp_path, monkeypatch):
     assert _click(b, f"p:a:{pid}").answers == ["Déjà traité."] and len(asked) == n   # double clic sans effet
 
 
-def test_proposal_ignore_and_weather_adapt(tmp_path, monkeypatch):
+def test_proposal_ignore(tmp_path, monkeypatch):
     asked = []
     b, store = _bot(tmp_path, monkeypatch, asked=asked)
     pid = store.add_proposal("Décale la sortie longue")
     q = _click(b, f"p:x:{pid}", bot_module.proposal_markup(pid))
     assert store.proposal(pid)["status"] == "ignored" and not asked and "on garde" in q.edits[-1][0]
-    wid = store.add_proposal("Alerte météo sur ma séance … Adapte-la au mieux", kind="weather")
-    _click(b, f"p:a:{wid}")
-    assert asked[-1][0] == "Alerte météo sur ma séance … Adapte-la au mieux"   # le texte EST la demande
 
 
 def test_checkin_flow_rpe_then_legs_and_pain_follow_up(tmp_path, monkeypatch):
@@ -392,8 +382,8 @@ def test_list_command_shows_current_checklist(tmp_path, monkeypatch):
     assert "0/1 ✅" in replies[-1][0] and ("☐ Œufs — 6", f"s:t:{lst.id}:0") in _buttons(replies[-1][1])
 
 
-def test_only_the_weekly_review_uses_the_planning_model(tmp_path, monkeypatch):
-    """Sonnet coûte plus cher : seul le bilan de la semaine l'utilise ; tout le reste (briefing, courses…) reste sur Haiku."""
+def test_only_the_review_uses_the_planning_model(tmp_path, monkeypatch):
+    """Sonnet coûte plus cher : seul /review l'utilise ; tout le reste (briefing, courses…) reste sur Haiku."""
     b, store = _bot(tmp_path, monkeypatch, runs=[_run(1)])
     calls = []
 
@@ -423,10 +413,6 @@ def test_only_the_weekly_review_uses_the_planning_model(tmp_path, monkeypatch):
     assert run(b.on_debrief) is False
     assert run(b.on_briefing) is False
     assert run(b.on_review) is True
-    asyncio.run(b.morning_briefing())
-    assert calls.pop()[1] is False
-    asyncio.run(b.weekly_review())
-    assert calls.pop()[1] is True
 
 
 
@@ -904,3 +890,13 @@ def test_newroute_unknown_place_says_so(tmp_path, monkeypatch, dora):
 
 # --- Journal alimentaire fiable (#44) -------------------------------------------
 
+
+
+def test_bob_never_writes_first_outside_the_run_debrief():
+    """#90 : ni briefing du matin, ni bilan du dimanche, ni alerte météo planifiés ; seul le débrief d'un nouveau run."""
+    for name in ("morning_briefing", "weekly_review", "check_weather"):
+        assert not hasattr(bot_module.CoachBot, name)
+    assert hasattr(bot_module.CoachBot, "check_new_activity")
+    assert hasattr(bot_module.CoachBot, "on_briefing") and hasattr(bot_module.CoachBot, "on_review")
+    for key in ("briefing_time", "weekly_review", "rain_check_minutes", "rain_hours_ahead"):
+        assert not hasattr(bot_module.settings, key)

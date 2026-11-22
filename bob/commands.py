@@ -66,7 +66,7 @@ HELP_TEXT = _("""🏃 *Salut, c'est Bob* 🤖
 
 Tu peux aussi m'envoyer des *vocaux* 🎙️. Quand je propose un changement, des boutons te permettent de l'appliquer.
 
-_Automatique : débrief et ressenti après chaque run, briefing chaque matin, bilan le dimanche soir, alerte météo (pluie, chaleur, vent, verglas) sur tes séances._""")
+_Automatique : débrief et ressenti après chaque run. Bob n'écrit jamais le premier sinon._""")
 
 
 def parse_days(args: list[str], default: int = AGENDA_DEFAULT_DAYS, maximum: int = AGENDA_MAX_DAYS) -> int:

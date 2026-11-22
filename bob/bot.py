@@ -1,5 +1,5 @@
-"""Telegram : messages (texte et vocaux), commandes, boutons, briefing matinal, bilan hebdo,
-détection de nouveaux runs avec ressenti, alertes météo."""
+"""Telegram : messages (texte et vocaux), commandes, boutons, détection de nouveaux runs avec débrief et ressenti.
+Bob n'écrit jamais le premier hors débrief de run."""
 import asyncio
 import contextlib
 import datetime
@@ -247,24 +247,19 @@ class CoachBot(InfoMixin, KitchenMixin, RunsMixin, JobsMixin):
             return
         await query.answer()
         remaining = without_proposal(query.message.reply_markup, pid)
-        if remaining is None and item["kind"] != "weather":   # sa propre bulle : elle garde la trace du choix
+        if remaining is None:
             await query.edit_message_text(f"{proposal_bubble(item.get('summary') or item['text'])}\n{PROPOSAL_OUTCOME[action]}",
                                           parse_mode=ParseMode.MARKDOWN)
         else:   # seuls ses boutons partent : les autres propositions du message restent utilisables
             await query.edit_message_reply_markup(remaining)
         if action == "a":
-            prompt = item["text"] if item["kind"] == "weather" else APPLY_PROMPT.format(text=item["text"])
-            await self._ask_and_reply(update, prompt)
+            await self._ask_and_reply(update, APPLY_PROMPT.format(text=item["text"]))
         elif action == "e":
             await agent.add_to_history(self.chat_id, f"[L'athlète veut ajuster ta proposition : {item['text']}]",
                                        "Dis-moi ce que tu veux changer.")
-            if item["kind"] == "weather":
-                await self._push(PROPOSAL_OUTCOME["e"])
         else:
             await agent.add_to_history(self.chat_id, f"[L'athlète a ignoré ta proposition : {item['text']}]",
                                        "D'accord, on garde le programme tel quel.")
-            if item["kind"] == "weather":
-                await self._push(PROPOSAL_OUTCOME["x"])
 
 
 TELEGRAM_CONNECT_TIMEOUT_S = 10
