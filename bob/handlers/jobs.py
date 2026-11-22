@@ -1,15 +1,14 @@
-"""Tâches planifiées : briefing matinal, bilan hebdomadaire, alertes météo."""
+"""Briefing et bilan de la semaine, à la demande (/briefing, /review) : Bob n'écrit jamais le premier hors débrief de run."""
 import asyncio
 import datetime
 import logging
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import Update
 from telegram.ext import ContextTypes
 
-from .. import agent, coaching, dreeve, weather, weather_alerts
+from .. import coaching, dreeve, weather_alerts
 from .. import calendar_store as cs
 from ..config import TZ, settings
-from ..memory import store
 from ..i18n import _
 
 logger = logging.getLogger(__name__)
@@ -35,7 +34,7 @@ REVIEW_PROMPT = (
 
 
 class JobsMixin:
-    """Méthodes de CoachBot déclenchées par le planificateur ou par leur commande."""
+    """Méthodes de CoachBot déclenchées par leur commande."""
 
     async def on_briefing(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not update.message or not await self._authorized(update):
@@ -52,14 +51,6 @@ class JobsMixin:
             return
         await self._ask_and_reply(update, prompt, allow_writes=False, planning=True, header=_("📊 *Bilan de la semaine*"))
 
-    async def morning_briefing(self) -> None:
-        try:
-            reply = await agent.ask(MORNING_PROMPT, chat_id=self.chat_id)
-        except Exception as e:
-            logger.exception("Briefing matinal en échec")
-            reply = agent.AgentReply(_("❌ Briefing matinal impossible : {error}").format(error=type(e).__name__))
-        await self._deliver(reply)
-
     def _review_prompt(self) -> str:
         """Prévu (agenda) vs fait (Dreeve) sur la semaine en cours, calculé par le code."""
         today = datetime.datetime.now(TZ).date()
@@ -71,41 +62,3 @@ class JobsMixin:
         runs = dreeve.get_runs_since_weeks(1)[0] if settings.dreeve_enabled else []
         stats = coaching.adherence(planned, runs, monday)
         return REVIEW_PROMPT.format(adherence=coaching.format_adherence(stats))
-
-    async def weekly_review(self) -> None:
-        try:
-            prompt = await asyncio.to_thread(self._review_prompt)
-            reply = await agent.ask(prompt, chat_id=self.chat_id, allow_writes=False, planning=True)
-        except Exception as e:
-            logger.exception("Bilan hebdo en échec")
-            reply = agent.AgentReply(_("❌ Bilan de la semaine impossible : {error}").format(error=type(e).__name__))
-        await self._deliver(reply, header=_("📊 *Bilan de la semaine*"))
-
-    async def check_weather(self) -> None:
-        """Prévient (une fois par risque et par séance) en cas de pluie, chaleur, vent ou verglas, et quand ça s'arrange."""
-        try:
-            now = datetime.datetime.now(TZ)
-            horizon = now + datetime.timedelta(hours=settings.rain_hours_ahead)
-            days = min(16, (settings.rain_hours_ahead + now.hour) // 24 + 2)
-            (events, __), forecasts = await asyncio.gather(
-                asyncio.to_thread(cs.list_events, now, horizon + datetime.timedelta(hours=6)),
-                asyncio.to_thread(weather.fetch_hourly, days),
-            )
-        except Exception as e:
-            logger.error(f"Alerte météo : vérification impossible : {e}")
-            return
-        for notice in weather_alerts.find_notices(events, forecasts, now, store.alert_state):
-            text = weather_alerts.format_notice(notice, now)
-            markup = None
-            if notice.kind == "alert":
-                pid = store.add_proposal(weather_alerts.adapt_prompt(notice), kind="weather")
-                markup = InlineKeyboardMarkup([[InlineKeyboardButton(_("🔁 Adapter"), callback_data=f"p:a:{pid}"),
-                                                InlineKeyboardButton(_("👍 Je garde"), callback_data=f"p:x:{pid}")]])
-            try:
-                await self._push(text, markup)
-            except Exception:
-                logger.exception("Alerte météo : envoi Telegram en échec")
-                continue
-            store.save_alert_state(notice.key, notice.end, notice.signalled, cleared=notice.kind == "clear")
-            await agent.add_to_history(self.chat_id, "[Alerte météo automatique envoyée par le système]", text)
-            logger.info(f"Alerte météo ({notice.kind}) : {notice.summary} ({notice.place}, {sorted(notice.hazards) or notice.cleared})")

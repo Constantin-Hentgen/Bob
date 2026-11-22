@@ -34,7 +34,3 @@ def test_str_strips_quotes_and_treats_empty_as_unset(monkeypatch):
     assert config._str("X_TEST") == "contrainte: a | objectif: b"
     monkeypatch.setenv("X_TEST", "")
     assert config._str("X_TEST", "def") == "def"
-
-
-def test_briefing_off():
-    assert config._briefing_time("off") is None and config._briefing_time("07:30") == (7, 30)

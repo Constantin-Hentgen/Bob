@@ -6,7 +6,6 @@ import pytest
 from caldav.lib.error import NotFoundError
 
 from bob import calendar_store as cs
-from bob.config import UTC
 
 H = datetime.timedelta(hours=1)
 

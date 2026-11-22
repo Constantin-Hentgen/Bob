@@ -1,38 +1,29 @@
-"""Alertes météo : prévient sur Telegram quand une séance planifiée tombe sous de la pluie, une forte
-chaleur, de fortes rafales ou un risque de verglas, et quand la menace disparaît (« bonne nouvelle »).
+"""Météo des séances : seuils pluie, chaleur, vent et verglas, et météo de chaque séance sur son créneau exact
+(affichée par /weather et donnée au coach). Plus d'alerte automatique : Bob n'écrit jamais le premier hors débrief de run.
 
-- Séances lues dans l'agenda sur les RAIN_ALERT_HOURS_AHEAD prochaines heures (48 h par défaut : l'alerte
-  part dès que la prévision annonce le risque, donc normalement 24 à 48 h avant la séance).
-  On ignore les journées entières, les événements > 5 h et ceux dont le titre contient un mot
-  de RAIN_ALERT_SKIP_KEYWORDS (ex. « repos »).
-- Lieu de la séance : champ LOCATION de l'événement, sinon un nom de lieu cité dans le
-  titre/la description, sinon le premier lieu de WEATHER_LOCATIONS.
+- Séances lues dans l'agenda ; on ignore les journées entières, les événements > 5 h et ceux dont le titre
+  contient un mot de RAIN_ALERT_SKIP_KEYWORDS (ex. « repos »).
+- Lieu de la séance : champ LOCATION de l'événement, sinon un nom de lieu cité dans le titre/la description,
+  sinon le premier lieu de WEATHER_LOCATIONS.
 - Prévision HORAIRE sur le créneau exact :
   ☔ pluie : probabilité max ≥ RAIN_ALERT_PROBABILITY % ET cumul ≥ RAIN_ALERT_MIN_MM mm ;
   🥵 chaleur : température ressentie max ≥ WEATHER_ALERT_HEAT_C ;
   💨 vent : rafales max ≥ WEATHER_ALERT_GUST_KMH ;
   🧊 verglas : température min ≤ WEATHER_ALERT_FREEZE_C avec neige / pluie verglaçante, ou sol mouillé
      (précipitations dans les 12 h avant la séance).
-- Une alerte par nouveau risque et par séance (un risque déjà signalé ne l'est pas deux fois ; si la
-  séance est déplacée, le nouveau créneau est réévalué). Si tous les risques signalés disparaissent,
-  un message « bonne nouvelle » part une fois (au plus tard 1 h avant la séance).
-- Messages générés par le code (aucun appel au modèle), avec la prévision des autres lieux pour
-  comparer ; ajoutés à l'historique pour que « déplace-la » fonctionne en réponse.
 """
 import datetime
 import logging
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
-from .config import DAYS, TZ, UTC, settings
-from .formatting import md_escape
+from .config import DAYS, TZ, settings
 from .i18n import _, colon
 
 logger = logging.getLogger(__name__)
 
 MAX_SESSION = datetime.timedelta(hours=5)
 WET_LOOKBACK = datetime.timedelta(hours=12)
-CLEAR_MIN_LEAD = datetime.timedelta(hours=1)
 ICY_CODES = {56, 57, 66, 67, 71, 73, 75, 77, 85, 86}   # pluie/bruine verglaçante, neige
 
 
@@ -119,98 +110,8 @@ def is_training(event: dict, start: datetime.datetime, end: datetime.datetime) -
     return not words & set(settings.rain_skip_keywords)
 
 
-@dataclass
-class Notice:
-    kind: str                       # "alert" | "clear"
-    key: str
-    uid: str
-    summary: str
-    start: datetime.datetime
-    end: datetime.datetime
-    place: str
-    hazards: dict[str, str]         # alerte : risques actuels ; « bonne nouvelle » : vide
-    new: set[str] = field(default_factory=set)        # risques jamais signalés pour cette séance
-    cleared: list[str] = field(default_factory=list)  # « bonne nouvelle » : risques disparus
-    others: dict[str, dict[str, str]] = field(default_factory=dict)
-    # Après envoi : risques considérés comme signalés. Pour une alerte, l'union avec ceux déjà signalés
-    # (un risque qui oscille d'une prévision à l'autre n'est pas re-signalé) ; vide après « bonne nouvelle »,
-    # pour qu'un risque qui revient soit signalé à nouveau.
-    signalled: list[str] = field(default_factory=list)
-
-
-def find_notices(events: list[dict], forecasts: dict[str, list[Hour]], now: datetime.datetime,
-                 state_of) -> list[Notice]:
-    """`state_of(clé)` → {hazards, cleared} déjà mémorisé pour la séance, ou None."""
-    places = list(forecasts)
-    if not places:
-        return []
-    horizon = now + datetime.timedelta(hours=settings.rain_hours_ahead)
-    notices = []
-    for ev in events:
-        start, end = datetime.datetime.fromisoformat(ev["start"]), datetime.datetime.fromisoformat(ev["end"])
-        if end <= now or start > horizon or not is_training(ev, start, end):
-            continue
-        key = f"{ev['uid']}@{start.astimezone(UTC).isoformat()}"
-        place = resolve_place(ev, places)
-        cond = conditions(forecasts[place], start, end)
-        if cond is None:
-            continue
-        current = cond.hazards()
-        previous = state_of(key) or {}
-        signalled = set(previous.get("hazards") or [])
-        base = dict(key=key, uid=ev.get("uid", ""), summary=ev.get("summary") or "Séance", start=start, end=end, place=place)
-        if set(current) - signalled:
-            others = {p: c.hazards() for p in places if p != place and (c := conditions(forecasts[p], start, end))}
-            notices.append(Notice("alert", hazards=current, new=set(current) - signalled, others=others,
-                                  signalled=sorted(signalled | set(current)), **base))
-        elif signalled and not current and start - now > CLEAR_MIN_LEAD:
-            notices.append(Notice("clear", hazards={}, cleared=sorted(signalled), **base))
-    return notices
-
-
-def _when(n: Notice, now: datetime.datetime | None) -> str:
-    s, e = n.start.astimezone(TZ), n.end.astimezone(TZ)
-    lead = f" ({lead_time(n.start, now)})" if now else ""
-    return f"{DAYS[s.weekday()]} {s:%d/%m} {s:%H:%M}–{e:%H:%M}{lead}"
-
-
-def lead_time(start: datetime.datetime, now: datetime.datetime) -> str:
-    hours = int((start - now).total_seconds() // 3600)
-    if hours < 1:
-        return _("imminent")
-    return _("dans {n} h").format(n=hours) if hours < 48 else _("dans {n} j").format(n=hours // 24)
-
-
 def _hazard_line(hazards: dict[str, str]) -> str:
     return " · ".join(f"{ICONS[h]} {HAZARD_LABELS[h]} {detail}" for h, detail in hazards.items())
-
-
-def format_notice(n: Notice, now: datetime.datetime | None = None) -> str:
-    if n.kind == "clear":
-        what = ", ".join(HAZARD_LABELS.get(h, h) for h in n.cleared)
-        return (_("✅ *Bonne nouvelle* : plus de risque ({what}) sur ta séance « {session} »").format(
-                    what=md_escape(what), session=md_escape(n.summary))
-                + f"\n- 📅 {_when(n, now)}\n- 📍 {md_escape(n.place)}\n" + _("_On garde le programme prévu._"))
-    title = _("☔ *Pluie prévue sur ta séance*") if set(n.hazards) == {"pluie"} else _("⚠️ *Météo à surveiller sur ta séance*")
-    lines = [
-        _("{title} « {session} »").format(title=title, session=md_escape(n.summary)),
-        f"- 📅 {_when(n, now)}",
-        "- 📍 " + colon(md_escape(n.place), md_escape(_hazard_line(n.hazards))),
-    ]
-    for place, hazards in n.others.items():
-        status = md_escape(_hazard_line(hazards)) if hazards else _("✅ RAS, bonne alternative")
-        lines.append("- 📍 " + colon(md_escape(place), status))
-    lines.append(_("_« Adapter » : je te propose un créneau ou un lieu plus favorable. Tu peux aussi me répondre directement._"))
-    return "\n".join(lines)
-
-
-def adapt_prompt(n: Notice) -> str:
-    """Demande envoyée au coach quand l'athlète clique « Adapter » sous une alerte."""
-    others = "; ".join(f"{p} : {_hazard_line(h) or 'RAS'}" for p, h in n.others.items()) or "aucun autre lieu"
-    return (f"Alerte météo sur ma séance « {n.summary} » (UID {n.uid}) du {_when(n, None)} à {n.place} : "
-            f"{_hazard_line(n.hazards)}. Autres lieux sur ce créneau : {others}. "
-            "Adapte-la au mieux (autre créneau proche, autre lieu, contenu ou tenue adaptés à la météo) "
-            "en respectant ma mémoire et le reste de la semaine, puis dis-moi ce que tu as changé.")
 
 
 def session_lines(events: list[dict], forecasts: dict[str, list[Hour]], now: datetime.datetime) -> list[str]:

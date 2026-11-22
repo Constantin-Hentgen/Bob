@@ -5,14 +5,11 @@ from types import SimpleNamespace as NS
 
 import pytest
 
-from bob import agent
 from bob import bot as bot_module
 from bob.handlers import info, jobs, kitchen, runs, ui
-from bob import voice, weather, weather_alerts
-from bob import calendar_store as cs
-from bob.config import TZ, settings
+from bob import voice
+from bob.config import settings
 from bob.memory import Store
-from bob.weather_alerts import Hour
 
 
 def _patch_bot(monkeypatch, name, value):
@@ -57,7 +54,7 @@ def _buttons(markup):
 
 @pytest.fixture(autouse=True)
 def alert_settings():
-    values = {"rain_hours_ahead": 48, "rain_probability": 60, "rain_min_mm": 0.3, "rain_skip_keywords": ["repos", "rest", "off"],
+    values = {"rain_probability": 60, "rain_min_mm": 0.3, "rain_skip_keywords": ["repos", "rest", "off"],
               "heat_alert_c": 28.0, "gust_alert_kmh": 50.0, "freeze_alert_c": 1.0}
     saved = {k: getattr(settings, k) for k in values}
     for k, v in values.items():
@@ -65,53 +62,6 @@ def alert_settings():
     yield
     for k, v in saved.items():
         object.__setattr__(settings, k, v)
-
-
-# --- check_weather -----------------------------------------------------------
-
-def _rainy_forecast():
-    base = datetime.datetime(2026, 11, 14, 0, 0, tzinfo=TZ)
-    hours = [Hour(base + datetime.timedelta(hours=h), 90 if h == 18 else 5, 1.5 if h == 18 else 0.0, 12.0, 12.0, 20.0, 3)
-             for h in range(48)]
-    return {"Paris": hours}
-
-
-def _session():
-    start = datetime.datetime(2026, 11, 14, 18, 0, tzinfo=TZ)
-    return {"uid": "u1", "summary": "Footing", "start": start.isoformat(),
-            "end": (start + datetime.timedelta(hours=1)).isoformat(), "description": ""}
-
-
-def test_check_weather_alerts_once_with_buttons(tmp_path, monkeypatch):
-    b, store = _bot(tmp_path, monkeypatch)
-    _at(monkeypatch, 10, 0)
-    monkeypatch.setattr(cs, "list_events", lambda start, end: ([_session()], None))
-    monkeypatch.setattr(weather, "fetch_hourly", lambda days=3: _rainy_forecast())
-
-    asyncio.run(b.check_weather())
-    assert len(b.sent) == 1
-    text, markup = b.sent[0]
-    assert [label for label, _ in _buttons(markup)] == ["🔁 Adapter", "👍 Je garde"]
-    pid = int(_buttons(markup)[0][1].split(":")[2])
-    assert store.proposal(pid)["kind"] == "weather"
-    key = f"u1@{datetime.datetime(2026, 11, 14, 18, 0, tzinfo=TZ).astimezone(datetime.timezone.utc).isoformat()}"
-    assert "pluie" in store.alert_state(key)["hazards"]
-
-    asyncio.run(b.check_weather())   # déjà signalé : pas de seconde alerte
-    assert len(b.sent) == 1
-
-
-def test_check_weather_swallows_calendar_error(tmp_path, monkeypatch):
-    b, store = _bot(tmp_path, monkeypatch)
-    _at(monkeypatch, 10, 0)
-
-    def boom(start, end):
-        raise RuntimeError("Agenda injoignable")
-
-    monkeypatch.setattr(cs, "list_events", boom)
-    monkeypatch.setattr(weather, "fetch_hourly", lambda days=3: _rainy_forecast())
-    asyncio.run(b.check_weather())
-    assert b.sent == []
 
 
 # --- _enqueue ------------------------------------------------------------------

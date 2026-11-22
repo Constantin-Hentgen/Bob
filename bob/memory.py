@@ -1,7 +1,7 @@
 """Mémoire persistante du coach : ce qu'il apprend sur toi au fil des conversations.
 
 Stockée en JSON dans DATA_DIR (volume Docker) avec le reste de l'état : historique de conversation,
-objectifs structurés, propositions en attente (boutons), ressentis après séance, alertes météo
+objectifs structurés, propositions en attente (boutons), ressentis après séance
 déjà envoyées et id de la dernière activité vue, pour survivre aux redémarrages du conteneur.
 Écriture atomique (fichier temporaire + rename).
 """
@@ -115,10 +115,7 @@ class Store:
         # next_shopping_id, next_pantry_id) restent dans le fichier, intactes, comme sauvegarde pour l'import.
         # Journal des repas et profil : chez Remy de v5.2 à v6, plus suivis depuis v7. Les anciennes clés (meals,
         # profile, next_meal_id, meal_checks, discoveries) restent dans le fichier, intactes.
-        # clé séance → {until, hazards, cleared} ; migre l'ancien format « rain_alerts » (clé → fin du créneau)
-        alerts = state.setdefault("weather_alerts", {})
-        for key, until in state.pop("rain_alerts", {}).items():
-            alerts.setdefault(key, {"until": until, "hazards": ["pluie"], "cleared": False})
+        # Alertes météo automatiques : supprimées en v7. Les anciennes clés (weather_alerts, rain_alerts) restent dans le fichier.
         if not state["memories"] and state["next_id"] == 1:
             # Connaissances de départ (COACH_SEED_MEMORY), uniquement à la création : ensuite tout se gère en conversation.
             for cat, text in self._seed:
@@ -222,22 +219,6 @@ class Store:
             self.state["history"][chat_id] = messages
             self._save()
 
-    # --- alertes météo ---------------------------------------------------------
-
-    def alert_state(self, key: str) -> dict | None:
-        """Ce qui a déjà été signalé pour une séance : {until, hazards, cleared}, ou None."""
-        return self.state["weather_alerts"].get(key)
-
-    def save_alert_state(self, key: str, until: datetime.datetime, hazards: list[str], cleared: bool = False) -> None:
-        with self._lock:
-            now = datetime.datetime.now(datetime.timezone.utc)
-            alerts = {k: v for k, v in self.state["weather_alerts"].items()
-                      if datetime.datetime.fromisoformat(v["until"]) > now}   # purge des séances passées
-            alerts[key] = {"until": until.astimezone(datetime.timezone.utc).isoformat(),
-                           "hazards": sorted(hazards), "cleared": cleared}
-            self.state["weather_alerts"] = alerts
-            self._save()
-
     # --- objectifs structurés -------------------------------------------------------
 
     @property
@@ -296,7 +277,7 @@ class Store:
     # --- propositions (boutons Appliquer / Ajuster / Ignorer) -------------------------
 
     def add_proposal(self, text: str, kind: str = "plan", **data) -> int:
-        """kind : plan | weather."""
+        """kind : plan."""
         with self._lock:
             now = datetime.datetime.now(datetime.timezone.utc)
             cutoff = now - datetime.timedelta(days=PROPOSAL_TTL_DAYS)

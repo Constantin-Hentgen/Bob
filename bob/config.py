@@ -73,34 +73,6 @@ def parse_locations(raw: str | None) -> list[tuple[str, float, float]]:
     return locations
 
 
-def _briefing_time(value: str | None, name: str = "BRIEFING_TIME") -> tuple[int, int] | None:
-    if not value or value.lower() in ("off", "non", "no", "none", "0"):
-        return None
-    try:
-        hour, minute = (int(x) for x in value.split(":"))
-        datetime.time(hour, minute)
-        return hour, minute
-    except ValueError:
-        raise ValueError(f"{name} doit être au format HH:MM ou « off » (reçu : {value!r})") from None
-
-
-_DOW = {"mon": 0, "lun": 0, "tue": 1, "mar": 1, "wed": 2, "mer": 2, "thu": 3, "jeu": 3,
-        "fri": 4, "ven": 4, "sat": 5, "sam": 5, "sun": 6, "dim": 6}
-
-
-def _weekly_time(value: str | None, name: str = "WEEKLY_REVIEW_TIME") -> tuple[int, int, int] | None:
-    """« sun 19:00 » → (jour 0-6, heure, minute) (WEEKLY_REVIEW_TIME) ; off = désactivé."""
-    if not value or value.lower() in ("off", "non", "no", "none", "0"):
-        return None
-    try:
-        day, hm = value.lower().split()
-        hour, minute = (int(x) for x in hm.split(":"))
-        datetime.time(hour, minute)
-        return _DOW[day[:3]], hour, minute
-    except (ValueError, KeyError):
-        raise ValueError(f"{name} doit être au format « sun 19:00 » ou « off » (reçu : {value!r})") from None
-
-
 # Fournisseurs de modèles : URL de l'API (compatible OpenAI sauf Anthropic), modèles par défaut (conversation,
 # bilan de la semaine) quand le fournisseur a des alias stables, tokens max par réponse. Sans modèle par défaut,
 # LLM_MODEL est requis. « openai-compatible » : n'importe quel serveur Chat Completions (LLM_BASE_URL requis).
@@ -173,8 +145,6 @@ class Settings:
     weather_locations: list[tuple[str, float, float]]
     weather_api_url: str
     # Alerte pluie
-    rain_check_minutes: int
-    rain_hours_ahead: int
     rain_probability: int
     rain_min_mm: float
     rain_skip_keywords: list[str]
@@ -183,8 +153,6 @@ class Settings:
     freeze_alert_c: float
     # Coach
     tz: ZoneInfo
-    briefing_time: tuple[int, int] | None
-    weekly_review: tuple[int, int, int] | None
     language: str
     whisper_model: str | None
     activity_poll_minutes: int
@@ -230,8 +198,6 @@ class Settings:
             weather_locations=_weather_locations(),
             weather_api_url=_str("WEATHER_API_URL", "https://api.open-meteo.com/v1/forecast"),
             giphy_api_key=_str("GIPHY_API_KEY"),
-            rain_check_minutes=_int("RAIN_ALERT_CHECK_MINUTES", 60),
-            rain_hours_ahead=_int("RAIN_ALERT_HOURS_AHEAD", 48),
             rain_probability=_int("RAIN_ALERT_PROBABILITY", 60),
             rain_min_mm=_float("RAIN_ALERT_MIN_MM") if _str("RAIN_ALERT_MIN_MM") else 0.3,
             rain_skip_keywords=[k.strip().lower() for k in _str("RAIN_ALERT_SKIP_KEYWORDS", "repos,rest,off").split(",")
@@ -240,8 +206,6 @@ class Settings:
             gust_alert_kmh=_float("WEATHER_ALERT_GUST_KMH") if _str("WEATHER_ALERT_GUST_KMH") else 50.0,
             freeze_alert_c=_float("WEATHER_ALERT_FREEZE_C") if _str("WEATHER_ALERT_FREEZE_C") else 1.0,
             tz=ZoneInfo(_str("COACH_TZ") or _str("TZ") or "Europe/Paris"),
-            briefing_time=_briefing_time(_str("BRIEFING_TIME", "08:00")),
-            weekly_review=_weekly_time(_str("WEEKLY_REVIEW_TIME", "sun 19:00")),
             language=_language(_str("BOT_LANGUAGE")),
             whisper_model=_optional_model(_str("WHISPER_MODEL", "small")),
             activity_poll_minutes=_int("ACTIVITY_POLL_MINUTES", 1),
@@ -283,7 +247,7 @@ class Settings:
             if not value:
                 logger.error(f"[CONFIG] {name} manquante : le coach ne peut pas fonctionner (voir .env.example).")
         optional = {
-            "TELEGRAM_CHAT_ID (sécurité + briefing + débriefs)": self.telegram_chat_id,
+            "TELEGRAM_CHAT_ID (sécurité + débriefs)": self.telegram_chat_id,
             "Dreeve REST (DREEVE_URL + DREEVE_API_KEY)": self.dreeve_enabled,
             "Dreeve MCP (DREEVE_MCP_KEY)": self.dreeve_mcp_key and self.dreeve_mcp_url,
             f"Messages vocaux (WHISPER_MODEL={self.whisper_model or 'off'})": self.whisper_model,
@@ -295,7 +259,7 @@ class Settings:
             logger.info(f"[CONFIG] {name} : {'activé' if ok else 'désactivé'}")
         logger.info(f"[CONFIG] fournisseur={self.llm_provider} ({self.llm_base_url or 'api.anthropic.com'}), "
                     f"modèles={self.model} (conversation) / {self.planning_model} (planification), "
-                    f"fuseau={self.tz.key}, briefing={self.briefing_time}, bilan hebdo={self.weekly_review}, "
+                    f"fuseau={self.tz.key}, "
                     f"détection runs={self.activity_poll_minutes} min")
 
 
