@@ -296,18 +296,17 @@ def test_tool_calls_written_as_text_are_retried_and_never_shown(tmp_path, monkey
 
     monkeypatch.setattr(agent, "_gather_context", fake_context)
     monkeypatch.setattr(dreeve_mcp, "load_tools", no_tools)
-    fake_text = "Ta liste est prête 🛒\n\n[save_shopping_list: riz]"
+    fake_text = "C'est calé 🛒\n\n[set_goal: semi]"
     first = NS(stop_reason="end_turn", usage=_usage(), content=[NS(type="text", text=fake_text)])
-    call = NS(stop_reason="tool_use", usage=_usage(), content=[NS(type="tool_use", id="m1", name="save_shopping_list", input={
-        "items": [{"name": "Riz"}], "days_covered": 3, "estimated_cost_min_eur": 2, "estimated_cost_max_eur": 3})])
-    final = NS(stop_reason="end_turn", usage=_usage(), content=[NS(type="text", text="Ta liste est prête 🛒\n[save_shopping_list]")])
+    call = NS(stop_reason="tool_use", usage=_usage(), content=[NS(type="tool_use", id="m1", name="set_goal", input={
+        "title": "Semi", "kind": "course"})])
+    final = NS(stop_reason="end_turn", usage=_usage(), content=[NS(type="text", text="C'est calé 🛒\n[set_goal]")])
     fake = FakeMessages([first, call, final])
     monkeypatch.setattr(agent, "_llm", llm.AnthropicLLM(NS(messages=fake)))
-    reply = asyncio.run(agent.ask("/shopping", chat_id="1", allow_writes=False))
-    assert reply.shopping_list is not None                                           # vraiment appelé
-    nudge = agent.PSEUDO_TOOL_NUDGE.format(names="save_shopping_list")
+    reply = asyncio.run(agent.ask("mon objectif", chat_id="1", allow_writes=False))
+    nudge = agent.PSEUDO_TOOL_NUDGE.format(names="set_goal")
     assert {"role": "user", "content": nudge} in fake.calls[1]["messages"]           # relance explicite
-    assert reply.text == "Ta liste est prête 🛒"                                      # jamais affiché
+    assert reply.text == "C'est calé 🛒"                                      # jamais affiché
     assert agent.pseudo_tool_calls("[send_gif: high five]\n[Note système, x]\n[set_goal]") == ["send_gif", "set_goal"]
 
 

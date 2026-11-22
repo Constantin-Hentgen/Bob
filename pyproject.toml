@@ -19,7 +19,6 @@ dependencies = [
     "mcp>=2.0",
     "faster-whisper>=1.1",
     "av>=11,<19",
-    "emile[client]",
     "dora-routes",
 ]
 
@@ -27,17 +26,15 @@ dependencies = [
 dev = [
     "pytest>=8",
     "pyyaml>=6.0.3",
-    "emile[service]>=0.6.0",
 ]
 
 [tool.uv]
 package = false
 
 [tool.uv.sources]
-emile = { url = "https://github.com/Constantin-Hentgen/Emile/archive/refs/tags/v0.6.0.tar.gz" }
 dora-routes = { url = "https://github.com/Constantin-Hentgen/Dora/archive/refs/tags/v0.6.0.tar.gz" }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
-markers = ["live: talks to the real Emile and Dora started by the CI job (BOB_LIVE_SERVICES=1)"]
+markers = ["live: talks to the real Dora started by the CI job (BOB_LIVE_SERVICES=1)"]

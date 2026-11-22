@@ -31,11 +31,6 @@ jobs:
           enable-cache: true
       - name: Install dependencies
         run: uv sync --frozen --python 3.13
-      - name: Start Emile at the version of docker-compose.yml
-        run: |
-          image() { uv run --frozen python -c "import sys, yaml; print(yaml.safe_load(open('docker-compose.yml'))['services'][sys.argv[1]]['image'])" "$1"; }
-          docker run -d --name emile -p 18002:8000 "$(image emile)"
-          timeout 90 sh -c "until curl -fs http://127.0.0.1:18002/health >/dev/null; do sleep 2; done"
       # Dora n'a pas d'image publiée : construite depuis le tag de docker-compose.yml. Sans BRouter (1,5 Go de tuiles) :
       # on vérifie le contrat (santé, validation, « BRouter injoignable ») ; le tracé est testé dans le dépôt de Dora.
       - name: Start Dora at the version of docker-compose.yml, without BRouter
@@ -45,15 +40,8 @@ jobs:
           docker run -d --name dora -p 18003:8000 -e BROUTER_URL=http://127.0.0.1:9/brouter dora-ci
           timeout 90 sh -c 'until curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:18003/health | grep -qE "200|503"; do sleep 2; done'
           echo "DORA_URL=http://127.0.0.1:18003" >> "$GITHUB_ENV"
-      - name: Create Bob's Emile household and API key
-        run: |
-          emile_key=$(docker exec emile emile setup bob --household Home --timezone Europe/Paris --language fr --boxes 3 \
-            | tail -n 1)
-          test -n "$emile_key"
-          echo "::add-mask::$emile_key"
-          { echo "EMILE_URL=http://127.0.0.1:18002"; echo "EMILE_API_KEY=$emile_key"; } >> "$GITHUB_ENV"
       - name: Run the live service tests
         run: BOB_LIVE_SERVICES=1 uv run --frozen python -m pytest -q tests/test_services_live.py
       - name: Service logs
         if: failure()
-        run: docker logs emile; docker logs dora
+        run: docker logs dora

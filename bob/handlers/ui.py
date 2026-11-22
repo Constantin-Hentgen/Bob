@@ -1,4 +1,4 @@
-"""Aides Telegram sans état : envoi en bulles, claviers, textes des boutons (propositions, courses, ressenti)."""
+"""Aides Telegram sans état : envoi en bulles, claviers, textes des boutons (propositions, ressenti)."""
 import asyncio
 import contextlib
 import logging
@@ -6,12 +6,9 @@ import logging
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
 from telegram.error import BadRequest
-from emile.core import render
-from emile.core.models import ShoppingList
 
 from ..formatting import bubbles, md_escape, md_unescape, split_message
 from ..memory import LEGS
-from ..config import settings
 from ..i18n import _
 
 logger = logging.getLogger(__name__)
@@ -78,30 +75,6 @@ def without_button(markup: InlineKeyboardMarkup | None, data: str) -> InlineKeyb
     """Le même clavier sans la ligne du bouton `data` ; None s'il ne reste rien."""
     rows = [list(row) for row in (markup.inline_keyboard if markup else ()) if all(b.callback_data != data for b in row)]
     return InlineKeyboardMarkup(rows) if rows else None
-
-
-def shopping_text(lst: ShoppingList) -> str:
-    done = sum(i.done for i in lst.items)
-    total = len(lst.items)
-    status = _("tout est dans le panier 🎉") if done == total else f"{done}/{total} ✅"
-    lines = [_("🛒 *Liste de courses* — {status}").format(status=status)]
-    if summary := render.summary_line(lst, settings.language):
-        lines.append(f"📆 {md_escape(summary)}")
-    if lst.coverage:
-        lines.append(f"🍽️ {md_escape(lst.coverage)}")
-    lines.append(_("_Touche un article quand il est dans le panier. Recettes : /recipes_"))
-    return "\n".join(lines)
-
-
-def shopping_markup(lst: ShoppingList) -> InlineKeyboardMarkup:
-    """Un bouton par article (☐ → ✅), précédé d'un bouton-titre par rayon ; « Tout décocher » en bas."""
-    rows = []
-    for aisle, entries in render.group_by_aisle(lst.items, settings.language).items():
-        rows.append([InlineKeyboardButton(f"— {aisle} —", callback_data="s:n")])
-        rows += [[InlineKeyboardButton(f"{'✅' if item.done else '☐'} {render.item_label(item)}", callback_data=f"s:t:{lst.id}:{i}")]
-                 for i, item in entries]
-    rows.append([InlineKeyboardButton(_("🧹 Tout décocher"), callback_data=f"s:r:{lst.id}")])
-    return InlineKeyboardMarkup(rows)
 
 
 def rpe_markup(activity_id) -> InlineKeyboardMarkup:

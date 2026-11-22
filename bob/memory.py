@@ -18,7 +18,7 @@ from .i18n import _
 
 logger = logging.getLogger(__name__)
 
-CATEGORIES = ["preference", "habitude", "contrainte", "objectif", "santé", "nutrition", "équipement", "autre"]
+CATEGORIES = ["preference", "habitude", "contrainte", "objectif", "santé", "équipement", "autre"]
 # Priorité d'un souvenir : 1 = règle (toujours appliquée, sauf demande explicite contraire), 2 = préférence forte
 # (appliquée sauf bonne raison, à expliquer), 3 = indication (à prendre en compte quand c'est possible).
 PRIORITIES = {1: _("RÈGLES (toujours appliquées, sauf demande explicite contraire de l'athlète)"),
@@ -111,10 +111,10 @@ class Store:
         state.setdefault("proposals", {})     # id → {text, kind, created, status}
         state.setdefault("next_proposal_id", 1)
         state.setdefault("checkins", {})      # id d'activité → {date, minutes, name, feel (0 = mort, 10 = facile ; anciens : rpe), legs}
-        # Liste de courses, stock et recettes : chez Emile depuis v5.3. Les anciennes clés (shopping, pantry,
-        # next_shopping_id, next_pantry_id) restent dans le fichier, intactes, comme sauvegarde pour l'import.
-        # Journal des repas et profil : chez Remy de v5.2 à v6, plus suivis depuis v7. Les anciennes clés (meals,
-        # profile, next_meal_id, meal_checks, discoveries) restent dans le fichier, intactes.
+        # Alimentation (liste de courses, stock, recettes, journal des repas, profil) : plus gérée par Bob depuis v7.
+        # Les anciennes clés (shopping, pantry, next_shopping_id, next_pantry_id, meals, profile, next_meal_id,
+        # meal_checks, discoveries) restent dans le fichier, intactes et ignorées ; les souvenirs de catégorie
+        # « nutrition » restent lisibles.
         # Alertes météo automatiques : supprimées en v7. Les anciennes clés (weather_alerts, rain_alerts) restent dans le fichier.
         if not state["memories"] and state["next_id"] == 1:
             # Connaissances de départ (COACH_SEED_MEMORY), uniquement à la création : ensuite tout se gère en conversation.

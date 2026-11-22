@@ -49,7 +49,7 @@ def test_load_statuses_are_words_not_enums():
 def test_prompt_bans_the_tics_seen_in_real_conversations():
     p = agent.SYSTEM_PROMPT
     for rule in ("Pas de tics", "Ne parle jamais de ta mécanique", "Pas d'offre de service", "Ne redemande jamais",
-                 "renvoie la version corrigée", "vérifie-le avant de l'écrire", "meilleure estimation"):
+                 "vérifie-le avant de l'écrire", "meilleure estimation"):
         assert rule in p, rule
 
 

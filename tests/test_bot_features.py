@@ -7,21 +7,14 @@ from telegram import InlineKeyboardMarkup
 
 from bob import agent
 from bob import bot as bot_module
-from bob.handlers import info, jobs, kitchen, runs, ui
+from bob.handlers import info, jobs, runs, ui
 from bob import dreeve
 from bob.memory import Store
-from bob.services import emile as emile_service
-from emile.core.models import ListItem, ShoppingList
-
-
-def emile_client():
-    """Le client d'Emile (l'Emile local de conftest.py), pour préparer ou vérifier la liste."""
-    return emile_service.client()
 
 
 def _patch_bot(monkeypatch, name, value):
     """Le code du bot est réparti sur plusieurs modules : on patche `name` partout où il est lu."""
-    for module in (m for m in (bot_module, ui, kitchen, runs, jobs, info) if hasattr(m, name)):
+    for module in (m for m in (bot_module, ui, runs, jobs, info) if hasattr(m, name)):
         monkeypatch.setattr(module, name, value)
 
 
@@ -132,7 +125,6 @@ def test_check_new_activity_retries_when_telegram_fails(tmp_path, monkeypatch):
     assert b.sent[0][0].strip() == "débrief" and "c:r:2:10" in [d for _, d in _buttons(b.sent[1][1])] and store.last_activity_id == 2
 
 
-
 # --- Commandes ---------------------------------------------------------------
 
 import datetime  # noqa: E402
@@ -176,16 +168,6 @@ def test_help_lists_every_command():
     for name, _, _ in commands.COMMANDS:
         assert f"/{name}" in commands.HELP_TEXT
     assert md_unescape(commands.format_weather(" (lieux : Maison)\n  lun 09/11 : ciel clair")).endswith("- lun 09/11 : ciel clair")
-
-
-def test_shopping_days_and_prompt():
-    assert commands.parse_days([], commands.SHOPPING_DEFAULT_DAYS, commands.SHOPPING_MAX_DAYS) == 7
-    assert commands.parse_days(["30"], commands.SHOPPING_DEFAULT_DAYS, commands.SHOPPING_MAX_DAYS) == 14
-    prompt = commands.shopping_prompt(3, datetime.date(2026, 11, 9))
-    assert "3 jours, du lun 09/11 au mer 11/11 inclus" in prompt
-    assert "objectifs sportifs et de santé" in prompt and "Ne modifie pas l'agenda" in prompt
-    assert "1 jour, du lun 09/11 au lun 09/11" in commands.shopping_prompt(1, datetime.date(2026, 11, 9))
-
 
 
 # --- Boutons, ressenti, objectifs, bilan ---------------------------------------
@@ -310,79 +292,6 @@ ITEMS = [{"name": "Bananes", "quantity": "7", "aisle": "🥦 Fruits et légumes"
          {"name": "  "}]   # ignoré
 
 
-def test_shopping_tool_saves_the_list_in_emile(tmp_path, monkeypatch):
-    from bob import tools
-    ledger = tools.Ledger()
-    out = tools.tool_save_shopping_list({"items": ITEMS, "start_time": "2099-11-09T15:00:00", "days_covered": 7,
-                                         "coverage": "déjeuners et dîners, 1 personne",
-                                         "estimated_cost_min_eur": 70, "estimated_cost_max_eur": 55}, ledger)
-    assert out["items"] == 3 and "calendar" not in out   # pas d'agenda courses chez Emile : l'heure est sans effet
-    lst = emile_client().current_list()
-    assert (lst.days, lst.coverage, lst.cost_min, lst.cost_max) == (7, "déjeuners et dîners, 1 personne", 55, 70)
-    assert [(i.name, i.qty) for i in lst.items] == [("Bananes", "7"), ("Riz", "500 g"), ("Pommes", None)]
-    assert tools.build_report(ledger, False) == ""   # la checklist suit la réponse, rien à signaler
-    assert [a.detail for a in ledger.actions if a.kind == "shopping"] == [str(lst.id)]
-    prompt = commands.shopping_prompt(7, datetime.date(2026, 11, 9), save_to_calendar=True)
-    assert "save_shopping_list" in prompt and "start_time" in prompt
-    assert "start_time" not in commands.shopping_prompt(7, datetime.date(2026, 11, 9))
-
-
-def test_shopping_tool_is_always_offered_and_calendar_tool_refuses_groceries():
-    from bob import tools
-    assert "save_shopping_list" in {t["name"] for t in tools.ALL_TOOLS} | {t["name"] for t in tools.READ_ONLY_TOOLS}
-    create = next(t for t in tools.ALL_TOOLS if t["name"] == "create_calendar_event")
-    assert "Jamais pour des courses alimentaires" in create["description"]
-
-
-def test_shopping_checklist_toggle_and_replacement(tmp_path, monkeypatch):
-    b, store = _bot(tmp_path, monkeypatch)
-    lst = emile_client().create_list([{"name": "Bananes", "qty": "7", "aisle": "🥦 Fruits"}, {"name": "Riz", "aisle": "🍚 Féculents"}],
-                                days=7, cost_min=55, cost_max=70, coverage="déjeuners et dîners")
-
-    # La checklist part avec la réponse de l'agent
-    asyncio.run(b._deliver(agent.AgentReply("Voici ta liste.", shopping_list=lst.id)))
-    text, markup = b.sent[-1]
-    assert "0/2 ✅" in text and "📆 7 jours · 55–70 € estimés" in text and "🍽️ déjeuners et dîners" in text
-    assert _buttons(markup) == [("— 🥦 Fruits —", "s:n"), ("☐ Bananes — 7", f"s:t:{lst.id}:0"),
-                                ("— 🍚 Féculents —", "s:n"), ("☐ Riz", f"s:t:{lst.id}:1"),
-                                ("🧹 Tout décocher", f"s:r:{lst.id}")]
-
-    async def tap(data):
-        q = FakeQuery(data)
-        update = NS(callback_query=q, effective_chat=NS(id=42), effective_message=None, message=None)
-        await b.on_button(update, None)
-        return q
-
-    q = asyncio.run(tap(f"s:t:{lst.id}:0"))
-    new_text, new_markup = q.edits[-1]
-    assert "1/2 ✅" in new_text and ("✅ Bananes — 7", f"s:t:{lst.id}:0") in _buttons(new_markup)
-
-    q = asyncio.run(tap(f"s:t:{lst.id}:1"))
-    assert "tout est dans le panier" in q.edits[-1][0]
-    asyncio.run(tap(f"s:r:{lst.id}"))
-    assert not any(i.done for i in emile_client().current_list().items)
-
-    # Une nouvelle liste remplace l'ancienne : les anciens boutons ne font plus rien
-    emile_client().create_list([{"name": "Œufs"}])
-    q = asyncio.run(tap(f"s:t:{lst.id}:0"))
-    assert "remplacée" in q.answers[-1] and not q.edits
-
-
-def test_list_command_shows_current_checklist(tmp_path, monkeypatch):
-    b, store = _bot(tmp_path, monkeypatch)
-    replies = []
-
-    async def reply_text(text, **kwargs):
-        replies.append((text, kwargs.get("reply_markup")))
-
-    update = NS(message=NS(reply_text=reply_text), effective_chat=NS(id=42))
-    asyncio.run(b.on_list(update, None))
-    assert "Pas de liste" in replies[-1][0]
-    lst = emile_client().create_list([{"name": "Œufs", "qty": "6"}])
-    asyncio.run(b.on_list(update, None))
-    assert "0/1 ✅" in replies[-1][0] and ("☐ Œufs — 6", f"s:t:{lst.id}:0") in _buttons(replies[-1][1])
-
-
 def test_only_the_review_uses_the_planning_model(tmp_path, monkeypatch):
     """Sonnet coûte plus cher : seul /review l'utilise ; tout le reste (briefing, courses…) reste sur Haiku."""
     b, store = _bot(tmp_path, monkeypatch, runs=[_run(1)])
@@ -408,144 +317,41 @@ def test_only_the_review_uses_the_planning_model(tmp_path, monkeypatch):
         asyncio.run(handler(update(), NS(args=list(args))))
         return calls.pop()[1]
 
-    assert run(b.on_shopping) is False
-    assert run(b.on_shopping, ["3"]) is False
-    assert run(b.on_message) is False          # « mets la liste de courses à 15h »
+    assert run(b.on_message) is False          # message libre
     assert run(b.on_debrief) is False
     assert run(b.on_briefing) is False
     assert run(b.on_review) is True
-
-
-
-def test_recipes_generated_once_then_cached_and_regenerated_on_demand(tmp_path, monkeypatch):
-    asked = []
-    b, store = _bot(tmp_path, monkeypatch, asked=asked)
-    replies = []
-
-    async def reply_text(text, **kwargs):
-        replies.append(text)
-
-    def update():
-        return NS(message=NS(reply_text=reply_text), effective_message=NS(reply_text=reply_text),
-                  effective_chat=NS(id=42, send_action=_noop))
-
-    asyncio.run(b.on_recipes(update(), NS(args=[])))
-    assert "Pas de liste" in replies[-1] and not asked
-
-    emile_client().create_list([{"name": "Poulet", "qty": "800 g"}, {"name": "Riz"}], days=7, coverage="déjeuners")
-    asyncio.run(b.on_recipes(update(), NS(args=[])))
-    prompt, allow_writes = asked[-1]
-    assert allow_writes is False and "- Poulet (800 g)\n- Riz" in prompt and "7 jours, déjeuners" in prompt
-    assert "boîtes" in prompt and "save_shopping_list" in prompt
-    assert emile_client().current_list().recipes == "débrief"   # réponse (factice) de l'agent, gardée par Emile avec la liste
-
-    asyncio.run(b.on_recipes(update(), NS(args=[])))      # 2e fois : réaffichée sans IA
-    assert len(asked) == 1 and replies[-1].strip() == "débrief"
-    asyncio.run(b.on_recipes(update(), NS(args=["new"])))  # /recipes new : régénérées
-    assert len(asked) == 2
 
 
 # --- /eat ----------------------------------------------------
 
 # --- Modification de la liste en cours ------------------------------------------------
 
-def test_edit_shopping_list_checks_removes_adds(tmp_path, monkeypatch):
-    from bob import tools
-    lst = emile_client().create_list([{"name": "Bananes", "qty": "7"}, {"name": "Riz"}, {"name": "Œufs", "qty": "6"},
-                                 {"name": "Thon en boîte"}], days=7)
-    emile_client().toggle(lst.id, 2)                       # Œufs déjà cochés (index 2)
-
-    ledger = tools.Ledger()
-    out = tools.tool_edit_shopping_list({"check": ["bananes", "Thon en boîte"], "remove": ["Riz"],
-                                         "add": [{"name": "Pain", "quantity": "1"}], "uncheck": ["Pâtes"]}, ledger)
-    new = emile_client().current_list()
-    assert [(i.name, i.done) for i in new.items] == [("Bananes", True), ("Œufs", True), ("Thon en boîte", True), ("Pain", False)]
-    assert out["removed"] == ["Riz"] and out["added"] == ["Pain"] and out["not_found"] == ["Pâtes"]
-    assert new.id != lst.id and new.days == 7
-    assert [a.detail for a in ledger.actions if a.kind == "shopping"] == [str(new.id)]
-    assert tools.build_report(ledger, False) == ""
-
-
-def test_kitchen_is_in_the_coach_context(tmp_path):
-    assert agent._kitchen_context() == ("3 au total", "aucune")
-    lst = emile_client().create_list([{"name": "Bananes", "qty": "7", "aisle": "🥦 Fruits"}, {"name": "Riz"}], days=7)
-    emile_client().toggle(lst.id, 0)
-    boxes, shopping = agent._kitchen_context()
-    assert boxes == "3 au total"
-    assert shopping.startswith("(2 articles, 1 achetés, couvre 7 jours)") and "- ✅ Bananes (7) [🥦 Fruits]\n- ☐ Riz" in shopping
-    assert "Stock" not in agent.SYSTEM_PROMPT and "update_stock" not in agent.SYSTEM_PROMPT
-
-
-def test_coach_says_so_when_the_kitchen_does_not_answer(tmp_path, monkeypatch):
-    from bob import tools
-    from bob.services import Unavailable
-
-    def down():
-        raise Unavailable("Emile", "injoignable (ConnectError)")
-
-    monkeypatch.setattr(emile_service, "client", down)
-    assert all(text.startswith("INDISPONIBLE (Emile") for text in agent._kitchen_context())
-    ledger = tools.Ledger()
-    out = tools.run_tool("edit_shopping_list", {"check": ["Riz"]}, ledger, {"edit_shopping_list"})
-    assert out["ok"] is False and "Emile" in out["error"] and not ledger.actions   # jamais « noté » à tort
-
-
-def test_edit_without_list_fails_cleanly(tmp_path):
-    from bob import tools
-    out = tools.run_tool("edit_shopping_list", {"check": ["Riz"]}, tools.Ledger(), {"edit_shopping_list"})
-    assert out["ok"] is False and "NotFound" in out["error"]
-
 
 # --- Plats mangés ------------------------------------
 
-def test_recipes_come_without_buttons(tmp_path, monkeypatch):
-    b, store = _bot(tmp_path, monkeypatch)
-    lst = emile_client().create_list([{"name": "Poulet"}])
 
-    async def fake_ask(prompt, chat_id, allow_writes=True, planning=False):
-        assert "propose_meal" not in prompt and "stock" not in prompt
-        return agent.AgentReply("🗓️ Recettes")
-
-    monkeypatch.setattr(bot_module.agent, "ask", fake_ask)
-    replies = []
-
-    async def reply_text(text, **kwargs):
-        replies.append((text, kwargs.get("reply_markup")))
-
-    update = NS(message=NS(reply_text=reply_text), effective_message=NS(reply_text=reply_text),
-                effective_chat=NS(id=42, send_action=_noop))
-    asyncio.run(b.on_recipes(update, NS(args=[])))
-    assert emile_client().current_list().recipe_meals == []
-    asyncio.run(b.on_recipes(update, NS(args=[])))                          # réaffichage sans IA, sans bouton
-    assert replies[-1][0].strip() == "🗓️ Recettes" and replies[-1][1] is None
-    assert lst.id == emile_client().current_list().id
+# --- Plus rien sur l'alimentation ----------------------------------------------------------------------------
 
 
-# --- Journal alimentaire et « qu'as-tu mangé ? » -------------------------------------
-
-# --- Boîtes (tups) : préparation des repas -------------------------------------------------------------------
-
-def test_meal_prep_prompts_aim_at_filling_boxes_with_variety():
-    for prompt in (commands.recipes_prompt(ShoppingList(id=1, items=[ListItem(name="Riz")], created=datetime.datetime(2026, 11, 9))),
-                   commands.shopping_prompt(7, datetime.date(2026, 11, 9))):
-        assert "boîtes" in prompt and "vari" in prompt
-    assert "PRÉPARATION DES REPAS" in agent.SYSTEM_PROMPT
-
-
-def test_no_food_monitoring_left():
+def test_no_food_management_left():
+    """#87 puis #94 : Bob est un coach de course à pied, rien sur l'alimentation (ni Remy, ni Emile)."""
     from bob import tools
     from bob.config import settings
     names = {name for name, __, __ in commands.COMMANDS}
-    assert {"shopping", "list", "recipes"} <= names and not {"eat", "nutrition", "stock"} & names
-    tool_names = {t["name"] for t in tools.ALL_TOOLS}
-    assert not {"propose_meal", "log_meal", "remove_meal", "find_food", "set_profile", "update_stock"} & tool_names
-    assert {"save_shopping_list", "edit_shopping_list", "search_recipe"} <= tool_names
+    assert not {"eat", "nutrition", "stock", "shopping", "list", "recipes"} & names
+    tool_names = {t["name"] for t in tools.ALL_TOOLS} | {t["name"] for t in tools.READ_ONLY_TOOLS}
+    assert not {"propose_meal", "log_meal", "remove_meal", "find_food", "set_profile", "update_stock",
+                "save_shopping_list", "edit_shopping_list", "search_recipe"} & tool_names
     for attr in ("meal_check_times", "eat_suggest_times", "nutrition_check_time", "new_dish_time", "shop_last_call",
-                 "pantry_check_time", "remy_url"):
+                 "pantry_check_time", "remy_url", "emile_url", "emile_api_key", "emile_enabled"):
         assert not hasattr(settings, attr), attr
-    assert "log_meal" not in agent.SYSTEM_PROMPT and "Pas de suivi des repas" in agent.SYSTEM_PROMPT
-    assert "/eat" not in commands.HELP_TEXT and "/nutrition" not in commands.HELP_TEXT
-
+    assert "PÉRIMÈTRE" in agent.SYSTEM_PROMPT and "tu n'as aucun outil pour ça" in agent.SYSTEM_PROMPT
+    for word in ("log_meal", "save_shopping_list", "PRÉPARATION DES REPAS", "STOCK"):
+        assert word not in agent.SYSTEM_PROMPT, word
+    for command in ("/eat", "/nutrition", "/stock", "/shopping", "/list", "/recipes"):
+        assert command not in commands.HELP_TEXT, command
+    assert not hasattr(agent.AgentReply("x"), "shopping_list")
 
 def test_messages_sent_in_a_row_get_one_reply(tmp_path, monkeypatch):
     asked = []
@@ -569,7 +375,6 @@ def test_messages_sent_in_a_row_get_one_reply(tmp_path, monkeypatch):
     (prompt, _), = asked
     assert "à traiter ensemble" in prompt and "1. fais toutes les modifs" in prompt and "2. et une semaine" in prompt
     assert bot_module.merge_messages(["seul"]) == "seul"
-
 
 
 def test_each_proposal_has_its_own_bubble_and_answering_one_keeps_the_other(tmp_path, monkeypatch):
@@ -608,7 +413,6 @@ def test_debrief_that_hangs_falls_back_to_raw_stats(tmp_path, monkeypatch):
     assert store.last_activity_id == 1 and bot_module.ACTIVITY_STATUS["result"] == "débrief envoyé : 1"
 
 
-
 def test_proactive_messages_reach_send_message_with_bound_chat_id(tmp_path, monkeypatch):
     """Régression : le texte passé en positionnel tombait sur chat_id (« multiple values for argument 'chat_id' »)."""
     sent = []
@@ -620,7 +424,6 @@ def test_proactive_messages_reach_send_message_with_bound_chat_id(tmp_path, monk
     b.chat_id, b.app = "42", NS(bot=NS(send_message=send_message))
     asyncio.run(b._push("⚡ *Nouveau run détecté !*"))
     assert sent == [("42", "⚡ *Nouveau run détecté !*\n")] or sent == [("42", "⚡ *Nouveau run détecté !*")]
-
 
 
 def test_reply_paragraphs_become_separate_messages(tmp_path, monkeypatch):
@@ -709,7 +512,6 @@ def test_pause_before_each_next_message_grows_with_its_length(monkeypatch):
     assert events == ["A", "typing", f"sleep {bot_module.bubble_gap('BB\n'):.1f}", "BB"]
 
 
-
 def test_never_more_than_four_messages_in_a_row(tmp_path, monkeypatch):
     from bob.formatting import bubbles
     six = "\n\n".join(["Un.", "Deux.", "Trois trois trois trois.", "Quatre.", "Cinq cinq cinq cinq cinq.", "Six."])
@@ -721,7 +523,6 @@ def test_never_more_than_four_messages_in_a_row(tmp_path, monkeypatch):
     pids = [(store.add_proposal(t, summary=t), t) for t in ("On décale jeudi ?", "On retire dimanche ?")]
     asyncio.run(b._deliver(agent.AgentReply(six, pids)))
     assert len(b.sent) == 4 and [t for t, _ in b.sent[2:]] == ["💡 On décale jeudi ?\n", "💡 On retire dimanche ?\n"]
-
 
 
 def test_meme_command_sends_a_gif_first_even_mid_session(tmp_path, monkeypatch):
@@ -890,7 +691,6 @@ def test_newroute_unknown_place_says_so(tmp_path, monkeypatch, dora):
 
 
 # --- Journal alimentaire fiable (#44) -------------------------------------------
-
 
 
 def test_bob_never_writes_first_outside_the_run_debrief():

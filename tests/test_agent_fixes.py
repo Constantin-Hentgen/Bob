@@ -129,7 +129,7 @@ def test_gather_context_reads_runs_once(monkeypatch):
         return []
 
     monkeypatch.setattr(dreeve, "settings", NS(dreeve_enabled=True))
-    monkeypatch.setattr(agent, "settings", NS(dreeve_enabled=True, context_days_ahead=7, giphy_api_key=None, meal_boxes=0))
+    monkeypatch.setattr(agent, "settings", NS(dreeve_enabled=True, context_days_ahead=7, giphy_api_key=None))
     monkeypatch.setattr(dreeve, "get_all_runs", fake_all_runs)
     monkeypatch.setattr(dreeve, "get_load_text", lambda: "charge")
     monkeypatch.setattr(agent.weather, "fetch_forecast", lambda: None)

@@ -14,10 +14,8 @@ from . import agent, commands, dreeve, voice  # noqa: F401  (dreeve : réexport�
 from . import calendar_store as cs  # noqa: F401  (réexporté)
 from .config import TZ, settings  # noqa: F401  (TZ : réexporté)
 from .memory import store
-from .services import ServiceError
 from .handlers.info import InfoMixin
 from .handlers.jobs import JobsMixin
-from .handlers.kitchen import KitchenMixin
 from .handlers.runs import ACTIVITY_STATUS, RunsMixin  # noqa: F401  (ACTIVITY_STATUS : réexporté, lu par app.py)
 from .handlers.ui import (
     BUBBLE_GAP_S,  # noqa: F401
@@ -29,8 +27,6 @@ from .handlers.ui import (
     proposal_bubble,
     proposal_markup,
     send_text,
-    shopping_markup,
-    shopping_text,
     without_button,  # noqa: F401
     without_proposal,
 )
@@ -43,7 +39,7 @@ APPLY_PROMPT = "Applique maintenant cette proposition que tu m'as faite et que j
 MESSAGE_DEBOUNCE_S = 4.0   # silence attendu avant de répondre, pour regrouper les messages envoyés à la suite
 
 
-class CoachBot(InfoMixin, KitchenMixin, RunsMixin, JobsMixin):
+class CoachBot(InfoMixin, RunsMixin, JobsMixin):
     def __init__(self, app: Application):
         self.app = app
         self.chat_id = settings.telegram_chat_id
@@ -74,16 +70,6 @@ class CoachBot(InfoMixin, KitchenMixin, RunsMixin, JobsMixin):
             await self._send_gif(reply.gif, update)
         for pid, summary in reply.proposals:
             await send_text(self._sender(update), proposal_bubble(summary), proposal_markup(pid))
-        if reply.shopping_list is not None:
-            try:
-                lst = await asyncio.to_thread(self._current_list)
-            except ServiceError as e:
-                logger.error(f"Checklist non affichée : {e}")
-                await send_text(self._sender(update), _("🛒 La liste est enregistrée, mais je n'arrive pas à l'afficher pour "
-                                                        "l'instant : /list la montrera dans un moment."))
-            else:
-                if lst is not None and lst.id == reply.shopping_list:
-                    await send_text(self._sender(update), shopping_text(lst), shopping_markup(lst))
 
     def _typing(self, update: Update | None = None):
         """Coroutine qui affiche « écrit… » dans le chat (le temps de la pause entre deux messages)."""
@@ -228,8 +214,6 @@ class CoachBot(InfoMixin, KitchenMixin, RunsMixin, JobsMixin):
                 await self._on_proposal(update, parts[1], parts[2])
             elif parts[0] == "c":
                 await self._on_checkin(update, parts[1], parts[2], parts[3])
-            elif parts[0] == "s":
-                await self._on_shopping_button(update, parts)
             elif parts[0] == "r":
                 await self._on_route_button(update, parts[1], parts[2], parts[3])
             else:
@@ -279,9 +263,9 @@ def build_bot() -> CoachBot:
     bot = CoachBot(app)
     handlers = {
         "plan": bot.on_agenda, "load": bot.on_form, "runs": bot.on_last_runs, "weather": bot.on_weather,
-        "goals": bot.on_goals, "memory": bot.on_memory, "list": bot.on_list, "recipes": bot.on_recipes, "meme": bot.on_meme,
+        "goals": bot.on_goals, "memory": bot.on_memory, "meme": bot.on_meme,
         "routes": bot.on_routes, "newroute": bot.on_new_route, "debrief": bot.on_debrief, "review": bot.on_review,
-        "shopping": bot.on_shopping, "briefing": bot.on_briefing, "help": bot.on_help,
+        "briefing": bot.on_briefing, "help": bot.on_help,
     }
     for name, aliases, __ in commands.COMMANDS:
         app.add_handler(CommandHandler([name, *aliases], handlers[name]))
