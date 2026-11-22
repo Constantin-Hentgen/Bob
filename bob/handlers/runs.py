@@ -10,7 +10,7 @@ from telegram.ext import ContextTypes
 from .. import agent, coaching, dreeve
 from ..config import TZ, settings
 from ..memory import LEGS, store
-from .ui import PAIN_FOLLOW_UP, legs_markup, rpe_markup
+from .ui import LEG_LABELS, PAIN_FOLLOW_UP, legs_markup, rpe_markup
 from ..i18n import _
 
 logger = logging.getLogger(__name__)
@@ -58,7 +58,9 @@ class RunsMixin:
                 parse_mode=ParseMode.MARKDOWN, reply_markup=legs_markup(activity_id))
         elif step == "l" and value in LEGS:
             store.set_checkin(activity_id, legs=value)
-            await query.edit_message_text(_("Merci 🙏") if value != "douleur" else _("Aïe 😬"))
+            feel = coaching.feel(store.state["checkins"].get(str(activity_id), {}))   # la bulle garde la trace, sans message de plus
+            await query.edit_message_text(_("Ressenti {rpe}/10 · jambes : {legs} ✅").format(
+                rpe="?" if feel is None else feel, legs=LEG_LABELS[value].lower()))
             if value == "douleur":
                 await agent.add_to_history(self.chat_id, "[Ressenti après séance : douleur signalée]", PAIN_FOLLOW_UP)
                 await self._push(PAIN_FOLLOW_UP)

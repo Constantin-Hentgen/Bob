@@ -250,7 +250,8 @@ def test_checkin_flow_rpe_then_legs_and_pain_follow_up(tmp_path, monkeypatch):
     assert len(_buttons(markup)) == 11 and ("0", "c:r:7:0") in _buttons(markup)
     q = _click(b, "c:r:7:2")
     assert "2/10" in q.edits[-1][0] and ("🔴 Douleur", "c:l:7:douleur") in _buttons(q.edits[-1][1])
-    _click(b, "c:l:7:douleur")
+    q = _click(b, "c:l:7:douleur")
+    assert q.edits[-1][0] == "Ressenti 2/10 · jambes : douleur ✅"   # pas de « Merci » : la bulle garde la trace
     item = store.state["checkins"]["7"]
     assert item == {"date": "2026-11-08", "minutes": 50, "name": "Run 7", "feel": 2, "legs": "douleur"}
     assert "T'as mal où" in b.sent[-1][0]

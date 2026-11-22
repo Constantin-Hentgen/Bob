@@ -98,8 +98,8 @@ MESSAGES: dict[str, str] = {
         '🍳 No shopping list right now: run /shopping first.',
     '❌ Recettes impossibles : {error}':
         "❌ Couldn't get recipes: {error}",
-    'Merci 🙏':
-        'Thanks 🙏',
+    'Ressenti {rpe}/10 · jambes : {legs} ✅':
+        'Feeling {rpe}/10 · legs: {legs} ✅',
     'Cette liste a été remplacée : /list affiche la liste en cours.':
         'This list was replaced: /list shows the current one.',
     "🛒 La liste de courses ne répond pas pour l'instant. Réessaie dans un moment.":
@@ -114,8 +114,6 @@ MESSAGES: dict[str, str] = {
         'No run found in Dreeve.',
     '{rpe}/10, ok 👌 Et les jambes ?':
         '{rpe}/10, got it 👌 And your legs?',
-    'Aïe 😬':
-        'Ouch 😬',
     "Alors, t'as senti comment ? De 0 (mort) à 10 (facile comme marcher) :":
         'So, how did it feel? From 0 (dead) to 10 (easy as walking):',
     "J'ai vu passer ta sortie 🏃 mais j'ai pas réussi à la regarder en détail 🥲 Tape /debrief pour réessayer.":
