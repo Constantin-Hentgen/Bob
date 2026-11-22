@@ -316,6 +316,24 @@ class Store:
             self._save()
             return dict(item)
 
+    def correct_checkin(self, activity_id, feel: int | None = None, legs: str | None = None) -> dict:
+        """Corrige le ressenti et/ou les jambes d'une séance déjà notée ; remplace aussi l'ancien format (rpe)."""
+        with self._lock:
+            item = self.state["checkins"].get(str(activity_id))
+            if item is None:
+                raise ValueError(f"séance {activity_id} inconnue : prends un id de la liste des ressentis")
+            if feel is not None:
+                if not 0 <= feel <= 10:
+                    raise ValueError("ressenti entre 0 et 10")
+                item["feel"] = feel
+                item.pop("rpe", None)
+            if legs is not None:
+                if legs not in LEGS:
+                    raise ValueError(f"jambes : {', '.join(LEGS)}")
+                item["legs"] = legs
+            self._save()
+            return dict(item)
+
     def recent_checkins(self, days: int, today: datetime.date) -> list[dict]:
         since = (today - datetime.timedelta(days=days)).isoformat()
         items = [dict(v, activity_id=k) for k, v in self.state["checkins"].items() if v.get("date", "") >= since]
