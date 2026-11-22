@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [8.0.0](https://github.com/Constantin-Hentgen/Bob/compare/v7.0.0...v8.0.0) (2026-11-22)
+
+
+### ⚠ BREAKING CHANGES
+
+* /shopping, /list and /recipes are removed, and Bob no longer talks to Emile. Delete the emile service data and the EMILE_* variables from the stack.
+
+### Added
+
+* fully decouple food management from Bob ([#95](https://github.com/Constantin-Hentgen/Bob/issues/95)) ([a010a00](https://github.com/Constantin-Hentgen/Bob/commit/a010a00fce2889bad3a3ac89786749a214d694ce))
+
 ## [7.0.0](https://github.com/Constantin-Hentgen/Bob/compare/v6.0.0...v7.0.0) (2026-11-22)
 
 
