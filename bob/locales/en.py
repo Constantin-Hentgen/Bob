@@ -76,14 +76,6 @@ MESSAGES: dict[str, str] = {
         'OK, tell me what you want to change 👂',
     'Ok, on garde comme ça 👍':
         'OK, we keep it as is 👍',
-    'tout est dans le panier 🎉':
-        "everything's in the basket 🎉",
-    '🛒 *Liste de courses* — {status}':
-        '🛒 *Shopping list* — {status}',
-    '_Touche un article quand il est dans le panier. Recettes : /recipes_':
-        "_Tap an item once it's in the basket. Recipes: /recipes_",
-    '🧹 Tout décocher':
-        '🧹 Untick all',
     'Fraîches':
         'Fresh',
     'Normales':
@@ -92,22 +84,8 @@ MESSAGES: dict[str, str] = {
         'Heavy',
     'Douleur':
         'Pain',
-    '🛒 Pas de liste de courses en cours. Lance /shopping pour en créer une.':
-        '🛒 No shopping list right now. Use /shopping to make one.',
-    "🍳 Pas de liste de courses en cours : lance d'abord /shopping.":
-        '🍳 No shopping list right now: run /shopping first.',
-    '❌ Recettes impossibles : {error}':
-        "❌ Couldn't get recipes: {error}",
     'Ressenti {rpe}/10 · jambes : {legs} ✅':
         'Feeling {rpe}/10 · legs: {legs} ✅',
-    'Cette liste a été remplacée : /list affiche la liste en cours.':
-        'This list was replaced: /list shows the current one.',
-    "🛒 La liste de courses ne répond pas pour l'instant. Réessaie dans un moment.":
-        "🛒 The shopping list isn't answering right now. Try again in a moment.",
-    "La cuisine ne répond pas, rien n'a changé. Réessaie dans un moment.":
-        "The kitchen isn't answering, nothing changed. Try again in a moment.",
-    "🛒 La liste est enregistrée, mais je n'arrive pas à l'afficher pour l'instant : /list la montrera dans un moment.":
-        "🛒 The list is saved, but I can't show it right now: /list will show it in a moment.",
     '❌ Dreeve indisponible : {error}':
         '❌ Dreeve unavailable: {error}',
     'Aucun run trouvé dans Dreeve.':
@@ -182,12 +160,6 @@ MESSAGES: dict[str, str] = {
         'AI debrief of your last run',
     'Bilan IA de la semaine (prévu vs fait)':
         'AI weekly review (planned vs done)',
-    'Liste de courses selon tes objectifs (7 j, ou /shopping 3)':
-        'Shopping list for your goals (7 d, or /shopping 3)',
-    'Ta liste de courses en cours, à cocher':
-        'Your current shopping list, to tick off',
-    'Recettes en boîtes pour ta liste de courses':
-        'Meal-prep recipes for your shopping list',
     '2-3 boucles de course autour de chez toi ou du boulot (carte + GPX)':
         '2-3 running loops around home or work (map + GPX)',
     'Une boucle jamais courue : distance, route/nature/mixte, lieu (carte + GPX)':
@@ -334,6 +306,6 @@ MESSAGES: dict[str, str] = {
         'avg HR {hr}',
     'Sortie':
         'Run',
-    "🏃 *Salut, c'est Bob* 🤖\nÉcris-moi simplement : « décale ma sortie de samedi », « je suis crevé, allège demain », « planifie ma semaine »…\n\n*Infos instantanées* (sans IA, gratuites)\n/plan — séances prévues sur 7 jours (/plan 14 pour 14 jours)\n/load — charge d'entraînement (TSB, ratio A/C) et volume\n/runs — tes 5 derniers runs\n/weather — prévisions par lieu\n/goals — tes objectifs et le compte à rebours\n/memory — ce que je sais de toi\n\n*Avec le coach* (IA)\n/debrief — débrief de ton dernier run\n/review — bilan de la semaine : prévu vs fait, forme, semaine prochaine\n/shopping — liste de courses pour 7 jours selon tes objectifs sportifs et santé (/shopping 3 pour 3 jours), à cocher au magasin\n/list — réaffiche ta liste de courses en cours, à cocher\n/recipes — recettes faciles à préparer en boîtes avec ta liste (/recipes new pour en avoir d'autres)\n/briefing — briefing complet, ajuste le programme dans l'agenda\n/meme — un mème qui résume ta journée d'entraînement 😂\n/routes — 2 ou 3 boucles à la distance et au lieu de ta prochaine séance, là où tu ne croises personne : ni voitures, ni foule, ni vélos (carte + fichier GPX) ; /routes travail 8 nature pour choisir le lieu, la distance et le revêtement\n/newroute — une boucle jamais courue : /newroute 10 route bois de vincennes (distance, route / nature / mixte, lieu) ; ce qui manque, je te le demande\n\n/help — cette aide\n\nTu peux aussi m'envoyer des *vocaux* 🎙️. Quand je propose un changement, des boutons te permettent de l'appliquer.\n\n_Automatique : débrief et ressenti après chaque run. Bob n'écrit jamais le premier sinon._":
-        "🏃 *Hi, it's Bob* 🤖\nJust text me: “move Saturday's run”, “I'm wiped, make tomorrow easier”, “plan my week”…\n\n*Instant info* (no AI, free)\n/plan — sessions planned for the next 7 days (/plan 14 for 14 days)\n/load — training load (TSB, A/C ratio) and volume\n/runs — your last 5 runs\n/weather — forecast per place\n/goals — your goals and the countdown\n/memory — what I know about you\n\n*With the coach* (AI)\n/debrief — debrief of your last run\n/review — weekly review: planned vs done, form, next week\n/shopping — shopping list for 7 days based on your sport and health goals (/shopping 3 for 3 days), to tick off in the store\n/list — shows your current shopping list again, to tick off\n/recipes — easy meal-prep recipes for your list (/recipes new for other ones)\n/briefing — full briefing, adjusts the plan in your calendar\n/meme — a meme that sums up your training day 😂\n/routes — 2 or 3 loops at your next session's distance and place, where you meet no one: no cars, no crowds, no bikes (map + GPX file); /routes work 8 trail to choose the place, distance and surface\n/newroute — a loop you've never run: /newroute 10 road central park (distance, road / trail / mixed, place); I'll ask for whatever is missing\n\n/help — this help\n\nYou can also send me *voice messages* 🎙️. When I suggest a change, buttons let you apply it.\n\n_Automatic: debrief and check-in after each run. Bob never writes first otherwise._",
+    "🏃 *Salut, c'est Bob* 🤖\nÉcris-moi simplement : « décale ma sortie de samedi », « je suis crevé, allège demain », « planifie ma semaine »…\n\n*Infos instantanées* (sans IA, gratuites)\n/plan — séances prévues sur 7 jours (/plan 14 pour 14 jours)\n/load — charge d'entraînement (TSB, ratio A/C) et volume\n/runs — tes 5 derniers runs\n/weather — prévisions par lieu\n/goals — tes objectifs et le compte à rebours\n/memory — ce que je sais de toi\n\n*Avec le coach* (IA)\n/debrief — débrief de ton dernier run\n/review — bilan de la semaine : prévu vs fait, forme, semaine prochaine\n/briefing — briefing complet, ajuste le programme dans l'agenda\n/meme — un mème qui résume ta journée d'entraînement 😂\n/routes — 2 ou 3 boucles à la distance et au lieu de ta prochaine séance, là où tu ne croises personne : ni voitures, ni foule, ni vélos (carte + fichier GPX) ; /routes travail 8 nature pour choisir le lieu, la distance et le revêtement\n/newroute — une boucle jamais courue : /newroute 10 route bois de vincennes (distance, route / nature / mixte, lieu) ; ce qui manque, je te le demande\n\n/help — cette aide\n\nTu peux aussi m'envoyer des *vocaux* 🎙️. Quand je propose un changement, des boutons te permettent de l'appliquer.\n\n_Automatique : débrief et ressenti après chaque run. Bob n'écrit jamais le premier sinon._":
+        "🏃 *Hi, it's Bob* 🤖\nJust text me: “move Saturday's run”, “I'm wiped, make tomorrow easier”, “plan my week”…\n\n*Instant info* (no AI, free)\n/plan — sessions planned for the next 7 days (/plan 14 for 14 days)\n/load — training load (TSB, A/C ratio) and volume\n/runs — your last 5 runs\n/weather — forecast per place\n/goals — your goals and the countdown\n/memory — what I know about you\n\n*With the coach* (AI)\n/debrief — debrief of your last run\n/review — weekly review: planned vs done, form, next week\n/briefing — full briefing, adjusts the plan in your calendar\n/meme — a meme that sums up your training day 😂\n/routes — 2 or 3 loops at your next session's distance and place, where you meet no one: no cars, no crowds, no bikes (map + GPX file); /routes work 8 trail to choose the place, distance and surface\n/newroute — a loop you've never run: /newroute 10 road central park (distance, road / trail / mixed, place); I'll ask for whatever is missing\n\n/help — this help\n\nYou can also send me *voice messages* 🎙️. When I suggest a change, buttons let you apply it.\n\n_Automatic: debrief and check-in after each run. Bob never writes first otherwise._",
 }

@@ -1,16 +1,16 @@
-"""Services voisins de Bob, dans le même stack Docker : Emile (courses), Dora (boucles).
+"""Services voisins de Bob, dans le même stack Docker : pour l'instant Dora (boucles).
 
-Chaque service a son module (`emile`, `dora`) qui expose un client typé, construit une fois depuis la configuration.
+Chaque service a son module (`dora`) qui expose un client typé, construit une fois depuis la configuration.
 Le reste de Bob n'appelle jamais leur HTTP directement et ne voit qu'un seul modèle d'erreur :
 
     from bob.services import ServiceError, Unavailable
-    from bob.services import emile
+    from bob.services import dora
 
     try:
-        with emile.calls():
-            lst = emile.client().current_list()
+        with dora.calls():
+            ...   # appels au client typé
     except Unavailable:
-        ...   # « Emile ne répond pas » : ne jamais faire comme si c'était enregistré
+        ...   # « Dora ne répond pas » : ne jamais faire comme si c'était fait
 
 `calls()` traduit les exceptions propres à chaque client (codes HTTP, réseau) en sous-classes de `ServiceError` et
 note l'état du service dans `STATUS` (affiché par /health).
@@ -24,8 +24,8 @@ import httpx2
 
 
 class ServiceError(Exception):
-    """Échec d'un appel à un service voisin. `service` : « Emile »… ; `code` : code d'erreur stable du service s'il en
-    donne un (`stale_list`…), sinon le statut HTTP ; `detail` : texte lisible, sans secret."""
+    """Échec d'un appel à un service voisin. `service` : « Dora »… ; `code` : code d'erreur stable du service s'il en
+    donne un, sinon le statut HTTP ; `detail` : texte lisible, sans secret."""
 
     def __init__(self, service: str, detail: str, *, status: int | None = None, code: str | None = None) -> None:
         super().__init__(f"{service} : {detail}")
@@ -49,7 +49,7 @@ class NotFound(ServiceError):
 
 
 class Conflict(ServiceError):
-    """L'état a changé entre-temps (409), par exemple une liste de courses remplacée."""
+    """L'état a changé entre-temps (409)."""
 
 
 class Invalid(ServiceError):

@@ -5,7 +5,7 @@
 <h1 align="center">Bob</h1>
 
 <p align="center">
-  A self-hosted AI running coach on Telegram: plans your sessions in your own calendar, knows your training data and the weather, tracks what you eat, and learns your preferences as you chat.
+  A self-hosted AI running coach on Telegram: plans your sessions in your own calendar, knows your training data and the weather, and learns your preferences as you chat.
 </p>
 
 <p align="center">
@@ -28,8 +28,7 @@ Bob ▸ Vas-y tranquille, t'as encore de la fatigue dans les jambes 😮‍💨
 
 - 📅 **Plans in your CalDAV calendar** (Radicale, Nextcloud, Baïkal, Fastmail, iCloud…), backward from your goals; every write is checked on the server
 - 🏃 **Uses your Dreeve data**: load, whole run history, a debrief and check-in after each run
-- 🌧️ **Weather alerts** per session and training place
-- 🛒 **Shopping**: a shopping checklist built around your goals and sessions, with batch-cooking recipes
+- 🌧️ **Weather** for each session on its exact slot, per training place (on demand with `/weather`)
 - 🗺️ **Running loops** around home or work, as maps and GPX files
 - 🎙️ **Voice notes** transcribed locally, 🧠 **memory** of your preferences, 🌍 French or English, single-user and self-hosted
 - 🤖 **Bring your own model**: Anthropic, OpenAI, DeepSeek, Mistral, OpenRouter, Groq, Gemini, or a local Ollama / LM Studio / vLLM server
@@ -60,7 +59,7 @@ The **[wiki](https://github.com/Constantin-Hentgen/Bob/wiki)** covers everything
 - [Configuration](https://github.com/Constantin-Hentgen/Bob/wiki/Configuration): every environment variable, with its type and default
 - [Deployment](https://github.com/Constantin-Hentgen/Bob/wiki/Deployment): Docker Compose, Portainer, updates and backups
 - [Commands](https://github.com/Constantin-Hentgen/Bob/wiki/Commands) and [Coaching](https://github.com/Constantin-Hentgen/Bob/wiki/Coaching): what you can ask and what the coach does on its own
-- [Weather Alerts](https://github.com/Constantin-Hentgen/Bob/wiki/Weather-Alerts), [Shopping List](https://github.com/Constantin-Hentgen/Bob/wiki/Meals-and-Nutrition), [Running Routes](https://github.com/Constantin-Hentgen/Bob/wiki/Running-Routes)
+- [Weather](https://github.com/Constantin-Hentgen/Bob/wiki/Weather-Alerts), [Running Routes](https://github.com/Constantin-Hentgen/Bob/wiki/Running-Routes)
 - [Error Messages](https://github.com/Constantin-Hentgen/Bob/wiki/Error-Messages) and [Known Limitations](https://github.com/Constantin-Hentgen/Bob/wiki/Known-Limitations): when something goes wrong
 - [How It Works](https://github.com/Constantin-Hentgen/Bob/wiki/How-It-Works), [Integrations](https://github.com/Constantin-Hentgen/Bob/wiki/Integrations), [Privacy and Safeguards](https://github.com/Constantin-Hentgen/Bob/wiki/Privacy-and-Safeguards), [Contributing](https://github.com/Constantin-Hentgen/Bob/wiki/Contributing)
 

@@ -223,23 +223,3 @@ class FakeObj:
 
     def delete(self):
         self.cal.objs.remove(self)
-
-
-class FakeShoppingCalendar:
-    def __init__(self):
-        self.objs = []
-
-    def add(self, ics):
-        self.objs.append(FakeObj(self, ics))
-
-    def add_event(self, ics):
-        self.add(ics)
-
-    def events(self):
-        return [o for o in self.objs if "BEGIN:VEVENT" in o.data]
-
-    def todos(self, include_completed=False):
-        return [o for o in self.objs if "BEGIN:VTODO" in o.data]
-
-    def get_event_by_uid(self, uid):
-        return next(o for o in self.objs if f"UID:{uid}" in o.data)

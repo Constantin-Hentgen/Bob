@@ -16,14 +16,13 @@ from .commands import BOT_COMMANDS
 from .config import UTC, settings
 from .services import STATUS, ServiceError
 from .services import dora as dora_service
-from .services import emile as emile_service
 
 logging.basicConfig(level=(os.getenv("LOG_LEVEL") or "INFO").strip().upper(), format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logging.getLogger("httpx").setLevel(logging.WARNING)   # sinon une ligne par long-polling Telegram
 logger = logging.getLogger("bob")
 
 
-SERVICES = (emile_service, dora_service)   # services voisins du même stack
+SERVICES = (dora_service,)   # services voisins du même stack
 
 
 def services_health() -> dict[str, dict[str, object]]:

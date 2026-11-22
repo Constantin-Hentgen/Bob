@@ -6,7 +6,7 @@ from types import SimpleNamespace as NS
 import pytest
 
 from bob import bot as bot_module
-from bob.handlers import info, jobs, kitchen, runs, ui
+from bob.handlers import info, jobs, runs, ui
 from bob import voice
 from bob.config import settings
 from bob.memory import Store
@@ -14,7 +14,7 @@ from bob.memory import Store
 
 def _patch_bot(monkeypatch, name, value):
     """Le code du bot est réparti sur plusieurs modules : on patche `name` partout où il est lu."""
-    for module in (m for m in (bot_module, ui, kitchen, runs, jobs, info) if hasattr(m, name)):
+    for module in (m for m in (bot_module, ui, runs, jobs, info) if hasattr(m, name)):
         monkeypatch.setattr(module, name, value)
 
 

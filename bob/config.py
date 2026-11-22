@@ -104,7 +104,7 @@ def _llm_provider(value: str | None, base_url: str | None) -> str:
 
 
 def _optional_model(value: str | None) -> str | None:
-    """Valeur, ou None si vide ou « off » (modèle Whisper, URL de la liste de courses…)."""
+    """Valeur, ou None si vide ou « off » (modèle Whisper, URL d'un service…)."""
     return None if not value or value.lower() in ("off", "non", "no", "none", "0") else value
 
 
@@ -162,10 +162,8 @@ class Settings:
     seed_memory: str | None
     data_dir: str
     http_timeout: int
-    # Services voisins (même stack Docker) : courses (Emile), boucles (Dora)
-    emile_url: str
+    # Service voisin (même stack Docker) : boucles (Dora)
     dora_url: str
-    emile_api_key: str | None
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -215,18 +213,12 @@ class Settings:
             seed_memory=_str("COACH_SEED_MEMORY"),
             data_dir=_str("COACH_DATA_DIR", "data"),
             http_timeout=_int("HTTP_TIMEOUT", 8),
-            emile_url=_str("EMILE_URL", "http://emile:8000").rstrip("/"),
             dora_url=_str("DORA_URL", "http://dora:8000").rstrip("/"),
-            emile_api_key=_str("EMILE_API_KEY"),
         )
 
     @property
     def dreeve_enabled(self) -> bool:
         return bool(self.dreeve_url and self.dreeve_api_key)
-
-    @property
-    def emile_enabled(self) -> bool:
-        return bool(self.emile_url and self.emile_api_key)
 
     @property
     def weather_enabled(self) -> bool:
@@ -252,7 +244,6 @@ class Settings:
             "Dreeve MCP (DREEVE_MCP_KEY)": self.dreeve_mcp_key and self.dreeve_mcp_url,
             f"Messages vocaux (WHISPER_MODEL={self.whisper_model or 'off'})": self.whisper_model,
             f"Météo ({', '.join(n for n, __, __ in self.weather_locations) or 'WEATHER_LOCATIONS'})": self.weather_enabled,
-            f"Emile, courses ({self.emile_url}, EMILE_API_KEY)": self.emile_enabled,
             f"Dora, boucles ({self.dora_url})": bool(self.dora_url),
         }
         for name, ok in optional.items():
