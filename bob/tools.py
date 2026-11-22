@@ -7,10 +7,10 @@ import requests
 from dataclasses import dataclass, field
 
 from . import calendar_store as cs
-from . import memes
+from . import coaching, memes
 from .config import settings
 from .formatting import md_escape
-from .memory import CATEGORIES, GOAL_KINDS, GOAL_PRIORITIES, format_goal, store
+from .memory import CATEGORIES, GOAL_KINDS, GOAL_PRIORITIES, LEGS, format_goal, store
 from .i18n import _
 from .services import emile
 
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class Action:
-    kind: str       # create | update | delete | remember | forget | goal | goal_remove | proposal | shopping | shopping_event
+    kind: str       # create | update | delete | remember | forget | goal | goal_remove | feeling | proposal | shopping | shopping_event
     label: str
     ok: bool
     detail: str = ""
@@ -128,6 +128,17 @@ def tool_remove_goal(args: dict, ledger: Ledger) -> dict:
     item = store.remove_goal(int(args["id"]))
     ledger.record("goal_remove", item["title"], True)
     return {"ok": True, "removed": item["title"]}
+
+
+def tool_set_run_feeling(args: dict, ledger: Ledger) -> dict:
+    feel = args.get("feel")
+    item = store.correct_checkin(args.get("activity_id"), feel=int(feel) if feel not in (None, "") else None,
+                                 legs=args.get("legs") or None)
+    feel_now = coaching.feel(item)
+    label = (f"{item.get('name') or 'séance'} {item.get('date', '')} : ressenti {'?' if feel_now is None else feel_now}/10, "
+             f"jambes {item.get('legs') or '?'}")
+    ledger.record("feeling", label, True)
+    return {"ok": True, "checkin": item}
 
 
 MAX_PROPOSAL_CHARS = 8000   # le détail est renvoyé tel quel à l'application : ne jamais le couper en route
@@ -317,6 +328,25 @@ GOAL_TOOLS = [
     },
 ]
 
+FEELING_TOOL = {
+    "name": "set_run_feeling",
+    "description": (
+        "Corrige le ressenti et/ou l'état des jambes enregistrés pour une séance passée, quand l'athlète les rectifie "
+        "(« en fait mardi c'était un 6 », « jambes lourdes plutôt »). Prends l'id dans la liste des ressentis du contexte ; "
+        "s'il y a un doute sur la séance, demande laquelle. Les valeurs sont durables et remplacent les anciennes."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "activity_id": {"type": "string", "description": "id de la séance (champ « id » dans les ressentis)"},
+            "feel": {"type": "integer", "minimum": 0, "maximum": 10,
+                     "description": "0 = mort, 10 = facile comme marcher (plus c'est bas, plus c'était dur)"},
+            "legs": {"type": "string", "enum": list(LEGS), "description": "état des jambes"},
+        },
+        "required": ["activity_id"],
+    },
+}
+
 PROPOSE_TOOL = {
     "name": "propose_change",
     "description": (
@@ -503,7 +533,7 @@ def tool_send_gif(args: dict, ledger: Ledger) -> dict:
     return {"ok": False, "error": f"aucun GIF trouvé pour « {query} » : continue sans"}
 
 
-_COMMON = [*MEMORY_TOOLS, *GOAL_TOOLS, PROPOSE_TOOL, *SHOPPING_TOOLS, EDIT_SHOPPING_TOOL, RECIPE_TOOL,
+_COMMON = [*MEMORY_TOOLS, *GOAL_TOOLS, FEELING_TOOL, PROPOSE_TOOL, *SHOPPING_TOOLS, EDIT_SHOPPING_TOOL, RECIPE_TOOL,
            *([GIF_TOOL] if settings.giphy_api_key else [])]
 ALL_TOOLS = [LIST_TOOL, *WRITE_TOOLS, *_COMMON]
 # pas d'effacement de mémoire ni d'objectifs dans les échanges sans écriture (débrief, bilans…) ; ordre inchangé
@@ -518,6 +548,7 @@ _IMPL = {
     "forget": tool_forget,
     "set_goal": tool_set_goal,
     "remove_goal": tool_remove_goal,
+    "set_run_feeling": tool_set_run_feeling,
     "propose_change": tool_propose_change,
     "save_shopping_list": tool_save_shopping_list,
     "edit_shopping_list": tool_edit_shopping_list,

@@ -79,7 +79,8 @@ def checkins_context(checkins: list[dict]) -> str:
             parts.append(f"ressenti {feel(c)}/10 ({FEEL_LABELS.get(feel(c), '?')})")
         if c.get("legs"):
             parts.append(f"jambes {LEGS.get(c['legs'], c['legs'])}")
-        lines.append(f"- {c['date']} : {', '.join(parts)}")
+        ident = f" (id {c['activity_id']})" if c.get("activity_id") is not None else ""
+        lines.append(f"- {c['date']}{ident} : {', '.join(parts)}")
     if rated:
         srpe = sum((10 - feel(c)) * (c.get("minutes") or 0) for c in rated)
         lines.append(f"Échelle du ressenti : {FEEL_SCALE}.")

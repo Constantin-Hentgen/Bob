@@ -901,3 +901,30 @@ def test_bob_never_writes_first_outside_the_run_debrief():
     assert hasattr(bot_module.CoachBot, "on_briefing") and hasattr(bot_module.CoachBot, "on_review")
     for key in ("briefing_time", "weekly_review", "rain_check_minutes", "rain_hours_ahead"):
         assert not hasattr(bot_module.settings, key)
+
+
+def test_a_past_run_feeling_can_be_corrected_and_survives_a_reload(tmp_path, monkeypatch):
+    """#70 : « en fait c'était un 6 » corrige durablement le ressenti de la bonne séance (id lisible dans le contexte)."""
+    from bob import tools
+    from bob.memory import Store
+    b, store = _bot(tmp_path, monkeypatch)
+    asyncio.run(b._ask_checkin(_run(7)))
+    _click(b, "c:r:7:2")
+    _click(b, "c:l:7:lourdes")
+    ctx = coaching.checkins_context(store.recent_checkins(14, datetime.date(2026, 11, 9)))
+    assert "(id 7)" in ctx and "ressenti 2/10" in ctx
+    monkeypatch.setattr(tools, "store", store)
+    ledger = tools.Ledger()
+    out = tools.run_tool("set_run_feeling", {"activity_id": "7", "feel": 6, "legs": "fraiches"}, ledger, {"set_run_feeling"})
+    assert out["ok"] and ledger.actions[0].kind == "feeling" and "ressenti 6/10" in ledger.actions[0].label
+    assert store.state["checkins"]["7"]["feel"] == 6 and store.state["checkins"]["7"]["legs"] == "fraiches"
+    assert Store(store.path).state["checkins"]["7"]["feel"] == 6   # durable : relu depuis le fichier
+    assert coaching.feel(store.state["checkins"]["7"]) == 6
+    # ancien format (rpe) : remplacé par le ressenti corrigé
+    store.state["checkins"]["8"] = {"date": "2026-11-01", "minutes": 30, "name": "Run", "rpe": 3}
+    tools.run_tool("set_run_feeling", {"activity_id": "8", "feel": 9}, tools.Ledger(), {"set_run_feeling"})
+    assert store.state["checkins"]["8"] == {"date": "2026-11-01", "minutes": 30, "name": "Run", "feel": 9}
+    # séance inconnue, valeur hors échelle : refus clair, rien n'est modifié
+    for args in ({"activity_id": "999", "feel": 5}, {"activity_id": "7", "feel": 11}, {"activity_id": "7", "legs": "x"}):
+        assert tools.run_tool("set_run_feeling", args, tools.Ledger(), {"set_run_feeling"})["ok"] is False
+    assert store.state["checkins"]["7"]["feel"] == 6
